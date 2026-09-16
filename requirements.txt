@@ -5,3 +5,4 @@ pandas
 urllib3
 pdfplumber
 pypdf
+genai
