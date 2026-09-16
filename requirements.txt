@@ -1,8 +1,5 @@
 streamlit
 requests
-beautifulsoup4
-pandas
 urllib3
-pdfplumber
-pypdf
 google-genai
+pandas
