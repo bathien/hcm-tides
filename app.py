@@ -7,14 +7,15 @@ import streamlit as st
 import urllib3
 from bs4 import BeautifulSoup
 
+# Tắt cảnh báo kết nối SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 st.set_page_config(
-    page_title="Hệ Thống Thủy Văn TP.HCM", page_icon="🌊", layout="wide"
+    page_title="Theo Dõi Thủy Văn TP.HCM (Có Debug)", page_icon="🌊", layout="wide"
 )
 
-st.title("🌊 Ứng Dụng Theo Dõi & Đọc Thủy Văn TP.HCM")
-st.caption("Nguồn dữ liệu chính thức: phongchonglutbaotphcm.gov.vn")
+st.title("🌊 Ứng Dụng Theo Dõi Thủy Văn TP.HCM Hằng Ngày")
+st.caption("Nguồn dữ liệu: phongchonglutbaotphcm.gov.vn")
 
 BASE_DOMAIN = "https://www.phongchonglutbaotphcm.gov.vn"
 TARGET_URL = f"{BASE_DOMAIN}/index.php/dubaocanhbao/du-bao-thuy-van"
@@ -26,161 +27,144 @@ HEADERS = {
 }
 
 
-@st.cache_data(ttl=1800)
-def fetch_hydro_articles():
-  """Lấy danh sách các bản tin thủy văn từ Joomla"""
+@st.cache_data(ttl=600)
+def fetch_phoca_data_with_debug():
+  """Hàm bóc tách dữ liệu có ghi lại log Debug chi tiết"""
+  debug_log = []
+  results = []
+
   try:
+    debug_log.append(f"🌐 1. Gửi request tới: `{TARGET_URL}`")
     res = requests.get(TARGET_URL, headers=HEADERS, timeout=15, verify=False)
     res.encoding = "utf-8"
-    soup = BeautifulSoup(res.text, "html.parser")
 
-    items = []
-    for a in soup.find_all("a", href=True):
-      href = a["href"]
-      title = a.get_text(strip=True)
+    debug_log.append(f"📡 Mã phản hồi (Status Code): `{res.status_code}`")
 
-      if len(title) > 8 and not href.startswith("javascript:"):
+    if res.status_code == 200:
+      soup = BeautifulSoup(res.text, "html.parser")
+      all_a_tags = soup.find_all("a", href=True)
+      debug_log.append(
+          f"🔍 Tìm thấy tổng cộng `{len(all_a_tags)}` thẻ `<a>` (link) trên trang web."
+      )
+
+      # Quét các thẻ <a> chứa liên kết PDF/PhocaDownload
+      for a in all_a_tags:
+        title = a.get_text(strip=True)
+        href = a["href"]
+
         if any(
-            k in href
-            for k in [
-                "/dubaocanhbao/",
-                "phocadownload",
-                "view=category",
-                "view=detail",
-            ]
+            k in href.lower()
+            for k in ["phocadownload", "download", "preview", ".pdf"]
         ):
-          full_url = BASE_DOMAIN + href if not href.startswith("http") else href
-          items.append({"title": title, "url": full_url})
+          match = re.search(r"window\.open\('([^']+)'", href)
+          clean_url = match.group(1) if match else href
 
-    return items
-  except Exception as e:
-    st.error(f"Lỗi khi quét danh sách bản tin: {e}")
-    return []
+          if not clean_url.startswith("http"):
+            clean_url = BASE_DOMAIN + clean_url
 
+          display_title = title if len(title) > 5 else clean_url.split("/")[-1]
+          results.append({"title": display_title, "link": clean_url})
 
-def extract_content_or_pdf(page_url):
-  """Bóc tách triệt để link PDF từ iFrame, onclick hoặc lấy bảng HTML"""
-  try:
-    res = requests.get(page_url, headers=HEADERS, timeout=15, verify=False)
-    res.encoding = "utf-8"
-    raw_html = res.text
-    soup = BeautifulSoup(raw_html, "html.parser")
-
-    # 1. Quét tìm link PDF trong thẻ <iframe> (Phoca PDF viewer)
-    for iframe in soup.find_all("iframe", src=True):
-      src = iframe["src"]
-      if ".pdf" in src.lower() or "phocadownload" in src.lower():
-        pdf_url = re.search(r"file=([^&]+)", src)
-        clean_pdf = pdf_url.group(1) if pdf_url else src
-        return (
-            BASE_DOMAIN + clean_pdf
-            if not clean_pdf.startswith("http")
-            else clean_pdf
-        ), "pdf"
-
-    # 2. Tìm link PDF trong thẻ <a> hoặc JavaScript onclick
-    for a in soup.find_all("a", href=True):
-      href = a["href"]
-      if ".pdf" in href.lower() or "download" in href.lower():
-        match = re.search(r"window\.open\('([^']+)'", href)
-        clean_link = match.group(1) if match else href
-        return (
-            BASE_DOMAIN + clean_link
-            if not clean_link.startswith("http")
-            else clean_link
-        ), "pdf"
-
-    # 3. Nếu không có PDF, quét lấy bảng HTML trực tiếp trong bài viết
-    tables = soup.find_all("table")
-    if tables:
-      html_tables = []
-      for tb in tables:
-        df_list = pd.read_html(str(tb))
-        if df_list:
-          html_tables.append(df_list[0])
-      if html_tables:
-        return html_tables, "html_table"
-
-    # 4. Cuối cùng lấy toàn bộ văn bản bài viết
-    main_text = soup.get_text("\n", strip=True)
-    return main_text, "text"
+      debug_log.append(
+          f"🎯 Đã lọc được `{len(results)}` liên kết bản tin PDF/PhocaDownload."
+      )
 
   except Exception as e:
-    return f"Lỗi trích xuất: {e}", "error"
+    debug_log.append(f"❌ Lỗi kết nối: `{str(e)}`")
+
+  return results, debug_log
 
 
-def read_pdf(pdf_url):
-  """Đọc PDF bằng pdfplumber"""
+def parse_pdf_with_debug(pdf_url):
+  """Đọc file PDF và ghi log Debug"""
+  pdf_debug_log = []
   try:
+    pdf_debug_log.append(f"📥 Đang tải file PDF từ: `{pdf_url}`")
     res = requests.get(pdf_url, headers=HEADERS, timeout=15, verify=False)
-    pdf_file = io.BytesIO(res.content)
+    pdf_debug_log.append(
+        f"📡 Trạng thái tải file PDF: `{res.status_code}` (Dung lượng:"
+        f" {len(res.content)} bytes)"
+    )
 
-    text_out = ""
-    tables_out = []
+    pdf_file = io.BytesIO(res.content)
+    text_content = ""
+    tables_data = []
 
     with pdfplumber.open(pdf_file) as pdf:
-      for page in pdf.pages:
-        txt = page.extract_text()
-        if txt:
-          text_out += txt + "\n"
-        for tb in page.extract_tables():
-          tables_out.append(pd.DataFrame(tb))
+      pdf_debug_log.append(f"📄 Tổng số trang PDF: `{len(pdf.pages)}`")
+      for i, page in enumerate(pdf.pages):
+        text = page.extract_text()
+        if text:
+          text_content += text + "\n"
 
-    return text_out, tables_out
+        extracted_tb = page.extract_tables()
+        if extracted_tb:
+          pdf_debug_log.append(
+              f"📊 Trang {i+1}: Tìm thấy `{len(extracted_tb)}` bảng số liệu."
+          )
+          for t in extracted_tb:
+            tables_data.append(pd.DataFrame(t))
+
+    return text_content, tables_data, pdf_debug_log
   except Exception as e:
-    return f"Không thể tải hoặc phân tích file PDF ({pdf_url}): {e}", []
+    pdf_debug_log.append(f"❌ Lỗi xử lý PDF: `{str(e)}`")
+    return f"Lỗi: {e}", [], pdf_debug_log
 
 
-# --- GIAO DIỆN STREMLIT ---
-with st.spinner("Đang tải danh sách bản tin thủy văn..."):
-  articles = fetch_hydro_articles()
+# --- GIAO DIỆN HỂN THỊ CHÍNH ---
+with st.spinner("Đang kết nối tới trang thủy văn..."):
+  hydro_items, fetch_logs = fetch_phoca_data_with_debug()
 
-if articles:
-  df_articles = pd.DataFrame(articles).drop_duplicates(subset=["url"])
-  unique_articles = df_articles.to_dict("records")
+# 🛠️ KHU VỰC DEBUG KẾT NỐI
+with st.expander("🛠️ BẬT / TẮT NHẬT KÝ DEBUG (Kiểm tra lỗi cào web)"):
+  st.subheader("Nhật ký lấy danh sách bản tin:")
+  for log in fetch_logs:
+    st.write(log)
+
+  if hydro_items:
+    st.subheader("Danh sách URL cào được:")
+    st.json(hydro_items)
+
+st.markdown("---")
+
+if hydro_items:
+  df_items = pd.DataFrame(hydro_items).drop_duplicates(subset=["link"])
+  unique_items = df_items.to_dict("records")
 
   selected_title = st.selectbox(
-      "📌 Chọn bản tin thủy văn hằng ngày:",
-      options=[item["title"] for item in unique_articles],
+      "📅 Chọn bản tin thủy văn bạn muốn xem:",
+      options=[item["title"] for item in unique_items],
   )
 
   selected_item = next(
-      item for item in unique_articles if item["title"] == selected_title
+      item for item in unique_items if item["title"] == selected_title
   )
+  pdf_url = selected_item["link"]
 
-  with st.spinner("Đang trích xuất dữ liệu thủy văn..."):
-    content_data, content_type = extract_content_or_pdf(selected_item["url"])
+  st.markdown(f"📥 **Đường dẫn tệp gốc:** [{pdf_url}]({pdf_url})")
 
-  st.markdown("---")
+  with st.spinner("Đang đọc các bảng số liệu từ PDF..."):
+    pdf_text, pdf_tables, pdf_logs = parse_pdf_with_debug(pdf_url)
 
-  # TRƯỜNG HỢP 1: BÁO TÁCH THÀNH CÔNG FILE PDF
-  if content_type == "pdf":
-    st.success("✅ Đã trích xuất thành công tệp PDF đính kèm!")
-    st.markdown(f"📥 **Đường dẫn PDF gốc:** [{content_data}]({content_data})")
+  # 🛠️ KHU VỰC DEBUG XỬ LÝ PDF
+  with st.expander("🛠️ NHẬT KÝ DEBUG XỬ LÝ PDF"):
+    for log in pdf_logs:
+      st.write(log)
 
-    with st.spinner("Đang đọc các bảng mực nước từ PDF..."):
-      pdf_text, pdf_tables = read_pdf(content_data)
+  if pdf_tables:
+    st.subheader("📊 Bảng thông số mực nước / Đỉnh triều trích xuất")
+    for df_tb in pdf_tables:
+      df_tb.columns = df_tb.iloc[0]
+      clean_df = df_tb[1:].reset_index(drop=True)
+      st.dataframe(clean_df, use_container_width=True)
+  else:
+    st.info("ℹ️ Không tìm thấy dạng bảng kẻ sẵn trong PDF này.")
 
-    if pdf_tables:
-      st.subheader("📊 Bảng thông số mực nước / Đỉnh triều")
-      for df_tb in pdf_tables:
-        df_tb.columns = df_tb.iloc[0]
-        clean_df = df_tb[1:].reset_index(drop=True)
-        st.dataframe(clean_df, use_container_width=True)
-
-    st.subheader("📝 Văn bản chi tiết trong bản tin")
-    st.text_area("Toàn văn bản tin:", pdf_text, height=300)
-
-  # TRƯỜNG HỢP 2: BẢN TIN LÀ BẢNG HTML TRỰC TIẾP
-  elif content_type == "html_table":
-    st.info("📊 Bản tin trình bày trực tiếp dưới dạng bảng số liệu HTML.")
-    for df_tb in content_data:
-      st.dataframe(df_tb, use_container_width=True)
-
-  # TRƯỜNG HỢP 3: VĂN BẢN
-  elif content_type == "text":
-    st.subheader("📝 Nội dung chi tiết bản tin")
-    st.text_area("Chi tiết:", content_data, height=350)
+  st.subheader("📝 Văn bản chi tiết trong bản tin")
+  st.text_area("Toàn văn bản tin:", pdf_text, height=350)
 
 else:
-    st.error("Không tìm thấy dữ liệu bản tin nào.")
+  st.error(
+      "Không thể lấy được dữ liệu bản tin. Vui lòng mở mục '🛠️ BẬT / TẮT NHẬT"
+      " KÝ DEBUG' ở trên để xem nguyên nhân."
+  )
