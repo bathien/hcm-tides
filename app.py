@@ -11,18 +11,16 @@ from google.genai import types
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# KHAI BÁO MODEL GEMINI FLASH CHUẨN THẾ HỆ MỚI NHẤT
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-3.6-flash"
 
-# 1. CẤU HÌNH GIAO DIỆN TỐI ƯU MÀN HÌNH TV 43 INCH
 st.set_page_config(
-    page_title="CẢNH BÁO NGẬP & WFH THẢO ĐIỀN",
+    page_title="CẢNH BÁO NGẬP & WFH THẢO ĐIỀN (WITH DEBUG)",
     page_icon="🚨",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-# THAY THẾ AUTORUN BẰNG JAVASCRIPT NHÚNG: TỰ ĐỘNG RELOAD MỖI 60 GIÂY (60000ms)
+# Tự động reload mỗi 60 giây
 st.components.v1.html(
     """
     <script>
@@ -34,7 +32,7 @@ st.components.v1.html(
     height=0,
 )
 
-# CSS TỰ ĐỘNG PHÓNG TO CHỮ & THEME TƯƠNG PHẢN CAO DÀNH CHO TV 43 INCH
+# CSS TỐI ƯU MÀN HÌNH TV 43 INCH
 st.markdown(
     """
     <style>
@@ -91,38 +89,34 @@ HEADERS = {
     )
 }
 
+# Kiểm tra Gemini API Key trong Secrets
+gemini_key_status = True
 try:
   GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 except KeyError:
-  st.error("⚠️ Chưa cài đặt GEMINI_API_KEY trong Secrets.")
-  st.stop()
+  gemini_key_status = False
 
-
-# 2. XÓA CACHE TỰ ĐỘNG LÚC 11:00 SÁNG GIỜ VIỆT NAM (UTC+7)
 def check_clear_cache():
   now_vn = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
   if now_vn.hour == 11 and now_vn.minute in [0, 1, 2]:
     st.cache_data.clear()
 
-
 check_clear_cache()
 
-
-# 3. LẤY DỰ BÁO LƯỢNG MƯA DÀNH RIÊNG CHO THẢO ĐIỀN (10.8031, 106.7324)
+# 1. LẤY LƯỢNG MƯA DỰ BÁO TẠI THẢO ĐIỀN (10.8031, 106.7324)
 @st.cache_data(ttl=3600)
-def fetch_weather_thao_dien(target_date):
-  url = f"https://api.open-meteo.com/v1/forecast?latitude=10.8031&longitude=106.7324&daily=precipitation_sum,precipitation_probability_max&timezone=Asia%2FBangkok&start_date={target_date}&end_date={target_date}"
+def fetch_weather_thao_dien(target_date_str):
+  url = f"https://api.open-meteo.com/v1/forecast?latitude=10.8031&longitude=106.7324&daily=precipitation_sum,precipitation_probability_max&timezone=Asia%2FBangkok&start_date={target_date_str}&end_date={target_date_str}"
   try:
     res = requests.get(url, timeout=5)
     if res.status_code == 200:
       data = res.json()
       rain_sum = data["daily"]["precipitation_sum"][0]
       rain_prob = data["daily"]["precipitation_probability_max"][0]
-      return rain_sum, rain_prob
-  except Exception:
-    pass
-  return 0, 0
-
+      return rain_sum, rain_prob, f"HTTP {res.status_code} - OK"
+    return 0, 0, f"HTTP Error {res.status_code}"
+  except Exception as e:
+    return 0, 0, f"Lỗi kết nối API Weather: {e}"
 
 def build_pdf_url(target_date):
   yyyy = target_date.strftime("%Y")
@@ -130,52 +124,47 @@ def build_pdf_url(target_date):
   dd = target_date.strftime("%d")
   return f"{BASE_DOMAIN}/phocadownload/{yyyy}/{mm}-{yyyy}/HCMC_TVHN_{yyyy}{mm}{dd}.pdf"
 
-
+# 2. TẢI FILE PDF (CÓ TỰ ĐỘNG TÌM BẢN TIN GẦN NHẤT NẾU HÔM NAY CHƯA CÓ)
 @st.cache_data(ttl=1800)
-def fetch_pdf_for_date(target_date):
-  pdf_url = build_pdf_url(target_date)
-  try:
-    res = requests.get(pdf_url, headers=HEADERS, timeout=5, verify=False)
-    if res.status_code == 200 and len(res.content) > 1000:
-      return pdf_url, res.content
-  except Exception:
-    pass
-  return None, None
+def fetch_pdf_with_fallback(today_date):
+  logs = []
+  for i in range(5):
+    check_date = today_date - datetime.timedelta(days=i)
+    pdf_url = build_pdf_url(check_date)
+    logs.append(f"Thử tải PDF ngày {check_date.strftime('%d/%m/%Y')}: `{pdf_url}`")
+    try:
+      res = requests.get(pdf_url, headers=HEADERS, timeout=5, verify=False)
+      logs.append(f"-> Mã phản hồi HTTP: `{res.status_code}`, Dung lượng: `{len(res.content)} bytes`")
+      if res.status_code == 200 and len(res.content) > 1000:
+        return pdf_url, check_date, res.content, logs
+    except Exception as e:
+      logs.append(f"-> Lỗi kết nối: `{e}`")
+  return None, None, None, logs
 
-
-# 4. PHÂN TÍCH VÀ ĐỀ XUẤT WFH DÀNH RIÊNG CHO THẢO ĐIỀN BẰNG GEMINI FLASH
-def analyze_thao_dien_wfh(pdf_bytes, rain_sum, rain_prob, target_date_str):
+# 3. PHÂN TÍCH VỚI GEMINI AI & GHI LOG DEBUG
+def analyze_thao_dien_wfh_debug(pdf_bytes, rain_sum, rain_prob, target_date_str):
+  ai_logs = []
   try:
     client = genai.Client(api_key=GEMINI_API_KEY)
-
     prompt = f"""
-        Bạn là hệ thống trí tuệ nhân tạo chuyên đánh giá rủi ro ngập lụt cho khu vực THẢO ĐIỀN (TP. Thủ Đức, TP.HCM).
-        Hãy đọc tệp PDF thủy văn TP.HCM cho ngày {target_date_str} và dữ liệu mưa thực tế tại tọa độ Thảo Điền (10.8031, 106.7324):
-        - Lượng mưa dự báo tại Thảo Điền: {rain_sum} mm.
+        Bạn là hệ thống AI đánh giá rủi ro ngập lụt khu vực THẢO ĐIỀN (TP. Thủ Đức, TP.HCM).
+        Đọc tệp PDF thủy văn ngày {target_date_str} và dữ liệu mưa Thảo Điền (10.8031, 106.7324):
+        - Lượng mưa dự báo: {rain_sum} mm.
         - Xác suất mưa: {rain_prob} %.
 
-        Đặc thù Thảo Điền: Là vùng ven sông Sài Gòn, chịu ảnh hưởng rất lớn từ trạm thủy văn Phú An. 
-        Nếu Triều cường Phú An >= 1.60m (Báo động 3) hoặc (>= 1.50m Báo động 2 + Mưa > 15mm), đường Quốc Hương, Nguyễn Văn Hưởng... tại Thảo Điền sẽ bị ngập rất sâu.
-
-        Nhiệm vụ:
-        1. Trích xuất số liệu TRẠM PHÚ AN (Mực nước đỉnh triều, Giờ đỉnh triều, Cấp báo động).
-        2. Khuyến nghị chế độ làm việc:
-           - "KHUYÊN NÊN WFH (LÀM VIỆC TẠI NHÀ)": Nguy cơ ngập cao tại Thảo Điền.
-           - "CÂN NHẮC WFH / ĐI LẠI TRÁNH GIỜ CAO ĐIỂM": Nguy cơ ngập vừa/nhẹ.
-           - "ĐẾN VĂN PHÒNG BÌNH THƯỜNG": An toàn, không ngập.
-
-        Trả về kết quả ĐÚNG định dạng JSON:
+        Trích xuất số liệu TRẠM PHÚ AN (Sông Sài Gòn) và đưa ra khuyến nghị làm việc.
+        Trả về kết quả ĐÚNG ĐỊNH DẠNG JSON duy nhất:
         {{
             "dinh_trieu": "1.68m",
             "gio_dinh_trieu": "17h30",
             "bao_dong": "BD3",
             "khuyen_nghi_wfh": "NÊN LÀM VIỆC TẠI NHÀ (WFH)",
             "muc_do_wfh": "DANGER",
-            "ly_do_wfh": "Cảnh báo ngập sâu các tuyến đường ven sông tại Thảo Điền (Quốc Hương, Nguyễn Văn Hưởng) do đỉnh triều BD3 kết hợp mưa."
+            "ly_do_wfh": "Cảnh báo ngập sâu tại Thảo Điền do đỉnh triều BD3 kết hợp nguy cơ mưa."
         }}
-        Lưu ý: "muc_do_wfh" chỉ nhận: "DANGER", "WARNING", hoặc "SAFE".
+        Lưu ý: "muc_do_wfh" chỉ nhận các giá trị: "DANGER", "WARNING", hoặc "SAFE".
         """
-
+    ai_logs.append(f"Đang gửi request tới Gemini Model: `{MODEL_NAME}`")
     response = client.models.generate_content(
         model=MODEL_NAME,
         contents=[
@@ -183,17 +172,21 @@ def analyze_thao_dien_wfh(pdf_bytes, rain_sum, rain_prob, target_date_str):
             prompt,
         ],
     )
+    raw_text = response.text
+    ai_logs.append("Phản hồi gốc từ Gemini AI:")
+    ai_logs.append(f"```\n{raw_text}\n```")
 
-    clean_json = re.sub(r"```json|```", "", response.text).strip()
-    return json.loads(clean_json)
-  except Exception:
-    return None
+    clean_json = re.sub(r"```json|```", "", raw_text).strip()
+    parsed_data = json.loads(clean_json)
+    return parsed_data, ai_logs
+  except Exception as e:
+    ai_logs.append(f"❌ Lỗi xử lý AI/JSON Parsing: `{e}`")
+    return None, ai_logs
 
-
-# --- GIAO DIỆN MÀN HÌNH TV 43 INCH ---
+# --- GIAO DIỆN CHÍNH MÀN HÌNH TV ---
 now_vn = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
 today_date = now_vn.date()
-is_weekend = today_date.weekday() >= 5  # Thứ 7 & Chủ Nhật
+is_weekend = today_date.weekday() >= 5
 
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
@@ -211,6 +204,10 @@ with col_h2:
 
 st.markdown("---")
 
+if not gemini_key_status:
+  st.error("❌ Không tìm thấy `GEMINI_API_KEY` trong Secrets!")
+  st.stop()
+
 if is_weekend:
   st.markdown(
       """
@@ -223,100 +220,95 @@ if is_weekend:
       unsafe_allow_html=True,
   )
 else:
-  target_date = today_date
-  target_date_str = target_date.strftime("%Y-%m-%d")
+  target_date_str = today_date.strftime("%Y-%m-%d")
 
-  with st.spinner(
-      "Đang tổng hợp dữ liệu Thủy văn & Mưa tọa độ Thảo Điền cho ngày"
-      f" {target_date.strftime('%d/%m/%Y')}..."
-  ):
-    pdf_url, pdf_bytes = fetch_pdf_for_date(target_date)
-    rain_sum, rain_prob = fetch_weather_thao_dien(target_date_str)
+  with st.spinner("Đang tải dữ liệu Thủy văn & Thời tiết mưa..."):
+    pdf_url, actual_date, pdf_bytes, pdf_fetch_logs = fetch_pdf_with_fallback(today_date)
+    rain_sum, rain_prob, weather_status = fetch_weather_thao_dien(target_date_str)
 
-  if pdf_url and pdf_bytes:
-    data = analyze_thao_dien_wfh(
-        pdf_bytes, rain_sum, rain_prob, target_date.strftime("%d/%m/%Y")
+  data = None
+  ai_logs = []
+  if pdf_bytes:
+    data, ai_logs = analyze_thao_dien_wfh_debug(
+        pdf_bytes, rain_sum, rain_prob, actual_date.strftime("%d/%m/%Y")
     )
 
-    if data:
-      wfh_style = "wfh-card-safe"
-      wfh_icon = "✅"
-      if data.get("muc_do_wfh") == "DANGER":
-        wfh_style = "wfh-card-danger"
-        wfh_icon = "🚨"
-      elif data.get("muc_do_wfh") == "WARNING":
-        wfh_style = "wfh-card-warning"
-        wfh_icon = "⚠️"
+  if data:
+    wfh_style = "wfh-card-safe"
+    wfh_icon = "✅"
+    if data.get("muc_do_wfh") == "DANGER":
+      wfh_style = "wfh-card-danger"
+      wfh_icon = "🚨"
+    elif data.get("muc_do_wfh") == "WARNING":
+      wfh_style = "wfh-card-warning"
+      wfh_icon = "⚠️"
 
-      # 1. THẺ KHUYẾN NGHỊ WFH TRÊN TV
+    st.markdown(
+        f"""
+        <div class="{wfh_style}">
+            <div style="font-size: 22px; text-transform: uppercase; letter-spacing: 2px;">KHUYẾN NGHỊ LÀM VIỆC TẠI THẢO ĐIỀN ({actual_date.strftime('%d/%m/%Y')}):</div>
+            <div style="font-size: 46px; font-weight: 900; margin: 8px 0;">{wfh_icon} {data.get('khuyen_nghi_wfh', 'N/A')}</div>
+            <div style="font-size: 24px; line-height: 1.4;">👉 <b>Cảnh báo khu vực:</b> {data.get('ly_do_wfh', 'N/A')}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
       st.markdown(
-          f"""
-            <div class="{wfh_style}">
-                <div style="font-size: 22px; text-transform: uppercase; letter-spacing: 2px;">KHUYẾN NGHỊ LÀM VIỆC TẠI THẢO ĐIỀN ({target_date.strftime('%d/%m/%Y')}):</div>
-                <div style="font-size: 46px; font-weight: 900; margin: 8px 0;">{wfh_icon} {data.get('khuyen_nghi_wfh', 'N/A')}</div>
-                <div style="font-size: 24px; line-height: 1.4;">👉 <b>Cảnh báo khu vực:</b> {data.get('ly_do_wfh', 'N/A')}</div>
-            </div>
-            """,
+          f"""<div class="metric-card">
+              <div class="metric-title">🌊 ĐỈNH TRIỀU PHÚ AN</div>
+              <div class="metric-value">{data.get('dinh_trieu', 'N/A')}</div>
+              <div class="metric-sub">⏰ Đỉnh triều: <b>{data.get('gio_dinh_trieu', 'N/A')}</b></div>
+          </div>""",
           unsafe_allow_html=True,
       )
-
-      st.markdown("<br>", unsafe_allow_html=True)
-
-      # 2. BỐN THẺ BÁO CÁO THÔNG SỐ TV
-      c1, c2, c3, c4 = st.columns(4)
-
-      with c1:
-        st.markdown(
-            f"""
-                <div class="metric-card">
-                    <div class="metric-title">🌊 ĐỈNH TRIỀU PHÚ AN</div>
-                    <div class="metric-value">{data.get('dinh_trieu', 'N/A')}</div>
-                    <div class="metric-sub">⏰ Đỉnh triều: <b>{data.get('gio_dinh_trieu', 'N/A')}</b></div>
-                </div>
-                """,
-            unsafe_allow_html=True,
-        )
-
-      with c2:
-        st.markdown(
-            f"""
-                <div class="metric-card">
-                    <div class="metric-title">🚨 CẤP BÁO ĐỘNG</div>
-                    <div class="metric-value" style="color: #ef4444;">{data.get('bao_dong', 'N/A')}</div>
-                    <div class="metric-sub">Trạm Phú An</div>
-                </div>
-                """,
-            unsafe_allow_html=True,
-        )
-
-      with c3:
-        st.markdown(
-            f"""
-                <div class="metric-card">
-                    <div class="metric-title">🌧️ MƯA TẠI THẢO ĐIỀN</div>
-                    <div class="metric-value" style="color: #60a5fa;">{rain_sum} mm</div>
-                    <div class="metric-sub">Lượng mưa dự báo</div>
-                </div>
-                """,
-            unsafe_allow_html=True,
-        )
-
-      with c4:
-        st.markdown(
-            f"""
-                <div class="metric-card">
-                    <div class="metric-title">☔ XÁC SUẤT MƯA</div>
-                    <div class="metric-value" style="color: #a78bfa;">{rain_prob}%</div>
-                    <div class="metric-sub">Khu vực Thảo Điền</div>
-                </div>
-                """,
-            unsafe_allow_html=True,
-        )
-    else:
-      st.error("Không thể phân tích dữ liệu ngày hôm nay.")
+    with c2:
+      st.markdown(
+          f"""<div class="metric-card">
+              <div class="metric-title">🚨 CẤP BÁO ĐỘNG</div>
+              <div class="metric-value" style="color: #ef4444;">{data.get('bao_dong', 'N/A')}</div>
+              <div class="metric-sub">Trạm Phú An</div>
+          </div>""",
+          unsafe_allow_html=True,
+      )
+    with c3:
+      st.markdown(
+          f"""<div class="metric-card">
+              <div class="metric-title">🌧️ MƯA THẢO ĐIỀN</div>
+              <div class="metric-value" style="color: #60a5fa;">{rain_sum} mm</div>
+              <div class="metric-sub">Lượng mưa dự báo</div>
+          </div>""",
+          unsafe_allow_html=True,
+      )
+    with c4:
+      st.markdown(
+          f"""<div class="metric-card">
+              <div class="metric-title">☔ XÁC SUẤT MƯA</div>
+              <div class="metric-value" style="color: #a78bfa;">{rain_prob}%</div>
+              <div class="metric-sub">Khu vực Thảo Điền</div>
+          </div>""",
+          unsafe_allow_html=True,
+      )
   else:
-    st.info(
-        f"ℹ️ Chưa có bản tin thủy văn được phát hành cho ngày hôm nay"
-        f" ({target_date.strftime('%d/%m/%Y')}). Bản tin thường cập nhật"
-        " lúc 11:00 AM."
-    )
+    st.error("⚠️ Không thể phân tích dữ liệu thủy văn hôm nay. Vui lòng kiểm tra mục Debug bên dưới.")
+
+  # --- KHU VỰC DEBUG HỆ THỐNG ---
+  with st.expander("🛠️ KHU VỰC DEBUG HỆ THỐNG (MỞ RỘNG ĐỂ KIỂM TRA LỖI)"):
+    st.markdown("### 1. Trạng thái tải PDF Thủy Văn:")
+    for log in pdf_fetch_logs:
+      st.write(log)
+
+    st.markdown("### 2. Trạng thái API Mưa (Open-Meteo):")
+    st.write(f"- Trạng thái: `{weather_status}`")
+    st.write(f"- Lượng mưa: `{rain_sum} mm`, Xác suất: `{rain_prob}%`")
+
+    st.markdown("### 3. Nhật ký Gemini AI:")
+    if ai_logs:
+      for log in ai_logs:
+        st.write(log)
+    else:
+      st.write("Chưa gửi được request tới AI do không có dữ liệu PDF.")
