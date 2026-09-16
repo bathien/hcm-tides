@@ -7,7 +7,7 @@ import streamlit as st
 import urllib3
 from bs4 import BeautifulSoup
 
-# Tắt cảnh báo kết nối SSL
+# Tắt cảnh báo SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 st.set_page_config(
@@ -15,10 +15,9 @@ st.set_page_config(
 )
 
 st.title("🌊 Ứng Dụng Theo Dõi Thủy Văn TP.HCM Hằng Ngày")
-st.caption("Nguồn dữ liệu trực tiếp: phongchonglutbaotphcm.gov.vn")
+st.caption("Nguồn dữ liệu: phongchonglutbaotphcm.gov.vn")
 
 BASE_DOMAIN = "https://www.phongchonglutbaotphcm.gov.vn"
-# Đường dẫn trực tiếp bạn cung cấp
 TARGET_URL = f"{BASE_DOMAIN}/index.php/da-ba-o-tha-y-v-n"
 HEADERS = {
     "User-Agent": (
@@ -29,23 +28,18 @@ HEADERS = {
 
 
 @st.cache_data(ttl=1800)
-def fetch_articles_from_new_url():
-  """Bóc tách các bản tin thủy văn từ đường dẫn mới"""
+def fetch_articles():
   try:
     res = requests.get(TARGET_URL, headers=HEADERS, timeout=15, verify=False)
     res.encoding = "utf-8"
     soup = BeautifulSoup(res.text, "html.parser")
 
     articles = []
-
-    # Quét tất cả thẻ <a> trên trang
     for a in soup.find_all("a", href=True):
       title = a.get_text(strip=True)
       href = a["href"]
 
-      # Điều kiện lọc bài viết: Độ dài tiêu đề > 10 và liên kết thuộc danh mục bài viết
       if len(title) > 10 and not href.startswith("javascript:"):
-        # Bỏ qua các link menu hệ thống trùng lặp
         if any(
             k in href.lower()
             for k in ["da-ba-o-tha-y-v-n", "dubaocanhbao", "article", "view="]
@@ -55,49 +49,27 @@ def fetch_articles_from_new_url():
 
     return articles
   except Exception as e:
-    st.error(f"Lỗi khi lấy dữ liệu: {e}")
+    st.error(f"Lỗi tải danh sách: {e}")
     return []
 
 
-def extract_detail_and_pdf(article_url):
-  """Đi vào trang bài viết chi tiết để lấy link PDF hoặc đọc trực tiếp bảng số liệu"""
+def get_pdf_link(article_url):
   try:
     res = requests.get(article_url, headers=HEADERS, timeout=15, verify=False)
     res.encoding = "utf-8"
     soup = BeautifulSoup(res.text, "html.parser")
 
-    # 1. Quét tìm tệp PDF đính kèm trong bài viết (nếu có)
     for a in soup.find_all("a", href=True):
       href = a["href"]
       if ".pdf" in href.lower() or "download" in href.lower():
-        pdf_url = BASE_DOMAIN + href if not href.startswith("http") else href
-        return pdf_url, "pdf"
-
-    # 2. Nếu không có PDF, bóc tách bảng HTML trực tiếp trong bài viết
-    tables = soup.find_all("table")
-    if tables:
-      parsed_tables = []
-      for tb in tables:
-        df_list = pd.read_html(str(tb))
-        if df_list:
-          parsed_tables.append(df_list[0])
-      if parsed_tables:
-        return parsed_tables, "html_table"
-
-    # 3. Trích xuất toàn văn bản nội dung bài viết
-    main_content = (
-        soup.find("div", class_="item-page")
-        or soup.find("div", id="content")
-        or soup
-    )
-    return main_content.get_text("\n", strip=True), "text"
-
-  except Exception as e:
-    return f"Lỗi trích xuất bài viết: {e}", "error"
+        return BASE_DOMAIN + href if not href.startswith("http") else href
+    return None
+  except Exception:
+    return None
 
 
-def parse_pdf(pdf_url):
-  """Trích xuất bảng và nội dung từ file PDF bằng pdfplumber"""
+def parse_pdf_advanced(pdf_url):
+  """Đọc PDF nâng cao: Kết hợp bóc bảng kẻ + Tự dựng bảng từ Raw Text"""
   try:
     res = requests.get(pdf_url, headers=HEADERS, timeout=15, verify=False)
     pdf_file = io.BytesIO(res.content)
@@ -110,25 +82,61 @@ def parse_pdf(pdf_url):
         txt = page.extract_text()
         if txt:
           text_out += txt + "\n"
-        for tb in page.extract_tables():
-          tables_out.append(pd.DataFrame(tb))
+
+        # 1. Thử bóc bảng bằng cấu hình linh hoạt (kể cả bảng không nét kẻ)
+        table_settings = {
+            "vertical_strategy": "text",
+            "horizontal_strategy": "text",
+            "intersection_y_tolerance": 5,
+        }
+        extracted_tables = page.extract_tables(table_settings)
+
+        for tb in extracted_tables:
+          df_tb = pd.DataFrame(tb).dropna(how="all")
+          if len(df_tb) > 1 and len(df_tb.columns) > 1:
+            tables_out.append(df_tb)
+
+    # 2. XỬ LÝ DỰ PHÒNG: Nếu pdfplumber không tạo được bảng, tự parse Raw Text
+    if not tables_out and text_out:
+      structured_rows = []
+      lines = text_out.split("\n")
+
+      for line in lines:
+        # Tìm các dòng chứa tên trạm (Phú An, Nhà Bè, Thủ Dầu Một...) hoặc số liệu mực nước/giờ
+        if any(
+            t in line.lower()
+            for t in [
+                "phú an",
+                "nhà bè",
+                "thủ dầu một",
+                "báo động",
+                "mực nước",
+                "đỉnh triều",
+            ]
+        ) or re.search(r"\d{1,2}h\d{0,2}|\d+,\d+|\d+\.\d+", line):
+          # Tách các từ/con số cách nhau bằng nhiều dấu cách
+          parts = [p.strip() for p in re.split(r"\s{2,}|\t", line) if p.strip()]
+          if len(parts) > 1:
+            structured_rows.append(parts)
+
+      if structured_rows:
+        tables_out.append(pd.DataFrame(structured_rows))
 
     return text_out, tables_out
   except Exception as e:
-    return f"Lỗi đọc file PDF: {e}", []
+    return f"Lỗi đọc PDF: {e}", []
 
 
-# --- GIAO DIỆN HỂN THỊ STREAMLIT ---
-with st.spinner("Đang kết nối và lấy danh sách bản tin thủy văn hằng ngày..."):
-  articles = fetch_articles_from_new_url()
+# --- GIAO DIỆN STREAMLIT ---
+with st.spinner("Đang lấy danh sách bản tin thủy văn..."):
+  articles = fetch_articles()
 
 if articles:
-  # Lọc bỏ các bài viết trùng lặp URL
   df_art = pd.DataFrame(articles).drop_duplicates(subset=["url"])
   unique_articles = df_art.to_dict("records")
 
   selected_title = st.selectbox(
-      "📅 Chọn bản tin thủy văn bạn muốn xem:",
+      "📅 Chọn bản tin thủy văn:",
       options=[item["title"] for item in unique_articles],
   )
 
@@ -136,40 +144,29 @@ if articles:
       item for item in unique_articles if item["title"] == selected_title
   )
 
-  with st.spinner("Đang tải dữ liệu thông số thủy văn..."):
-    content, content_type = extract_detail_and_pdf(selected_item["url"])
+  with st.spinner("Đang tìm và đọc tệp PDF..."):
+    pdf_url = get_pdf_link(selected_item["url"])
 
   st.markdown("---")
 
-  # XỬ LÝ KẾT QUẢ HIỂN THỊ
-  if content_type == "pdf":
-    st.success("✅ Đã phát hiện tệp PDF thủy văn đính kèm!")
-    st.markdown(f"📥 **Tải về file gốc:** [{content}]({content})")
+  if pdf_url:
+    st.success("✅ Đã tìm thấy tệp PDF!")
+    st.markdown(f"📥 **Link PDF gốc:** [{pdf_url}]({pdf_url})")
 
-    with st.spinner("Đang đọc các bảng số liệu mực nước từ PDF..."):
-      pdf_text, pdf_tables = parse_pdf(content)
+    with st.spinner("Đang phân tích số liệu từ PDF..."):
+      pdf_text, pdf_tables = parse_pdf_advanced(pdf_url)
 
     if pdf_tables:
-      st.subheader("📊 Bảng thông số mực nước / Đỉnh triều trích xuất từ PDF")
-      for df_tb in pdf_tables:
-        df_tb.columns = df_tb.iloc[0]
-        clean_df = df_tb[1:].reset_index(drop=True)
-        st.dataframe(clean_df, use_container_width=True)
+      st.subheader("📊 Bảng thông số mực nước / Đỉnh triều đã tự động trích xuất")
+      for i, df_tb in enumerate(pdf_tables):
+        # Tối ưu giao diện bảng
+        st.dataframe(df_tb, use_container_width=True)
+    else:
+      st.info("ℹ️ Không thể tự dựng bảng từ PDF này.")
 
-    st.subheader("📝 Văn bản chi tiết trong bản tin")
-    st.text_area("Toàn văn bản tin:", pdf_text, height=300)
-
-  elif content_type == "html_table":
-    st.subheader("📊 Bảng thông số mực nước / Đỉnh triều (Dạng Bảng HTML)")
-    for df_tb in content:
-      st.dataframe(df_tb, use_container_width=True)
-
-  elif content_type == "text":
-    st.subheader("📝 Nội dung chi tiết bản tin")
-    st.text_area("Nội dung:", content, height=400)
-
+    with st.expander("📝 Xem toàn bộ nội dung Raw Text từ PDF"):
+      st.text_area("Raw Text:", pdf_text, height=300)
+  else:
+    st.warning("Bài viết này không có tệp PDF đính kèm.")
 else:
-  st.error(
-      "Không thể tải danh sách bài viết từ đường dẫn mới. Vui lòng kiểm tra lại"
-      " kết nối mạng."
-  )
+  st.error("Không thể lấy dữ liệu bản tin.")
