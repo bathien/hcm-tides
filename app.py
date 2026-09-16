@@ -8,14 +8,13 @@ import streamlit as st
 import urllib3
 from google import genai
 from google.genai import types
-from streamlit_autorun import autorun
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# 1. KHAI BÁO MODEL GEMINI FLASH THẾ HỆ MỚI NHẤT
-MODEL_NAME = "gemini-3.6-flash"  # Nếu Google cập nhật bản 3.6, bạn đổi chuỗi này thành "gemini-3.6-flash"
+# KHAI BÁO MODEL GEMINI FLASH CHUẨN THẾ HỆ MỚI NHẤT
+MODEL_NAME = "gemini-2.5-flash"
 
-# CẤU HÌNH GIAO DIỆN TỐI ƯU MÀN HÌNH TV 43 INCH
+# 1. CẤU HÌNH GIAO DIỆN TỐI ƯU MÀN HÌNH TV 43 INCH
 st.set_page_config(
     page_title="CẢNH BÁO NGẬP & WFH THẢO ĐIỀN",
     page_icon="🚨",
@@ -23,8 +22,17 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Tự động refresh trang mỗi 60 giây (60000 ms)
-autorun(interval=60000, key="tv_auto_refresh")
+# THAY THẾ AUTORUN BẰNG JAVASCRIPT NHÚNG: TỰ ĐỘNG RELOAD MỖI 60 GIÂY (60000ms)
+st.components.v1.html(
+    """
+    <script>
+        setTimeout(function(){
+            window.parent.location.reload();
+        }, 60000);
+    </script>
+""",
+    height=0,
+)
 
 # CSS TỰ ĐỘNG PHÓNG TO CHỮ & THEME TƯƠNG PHẢN CAO DÀNH CHO TV 43 INCH
 st.markdown(
@@ -100,7 +108,7 @@ def check_clear_cache():
 check_clear_cache()
 
 
-# 3. LẤY DỰ BÁO LƯỢNG MƯA TẠI TỌA ĐỘ THẢO ĐIỀN (10.8031, 106.7324)
+# 3. LẤY DỰ BÁO LƯỢNG MƯA DÀNH RIÊNG CHO THẢO ĐIỀN (10.8031, 106.7324)
 @st.cache_data(ttl=3600)
 def fetch_weather_thao_dien(target_date):
   url = f"https://api.open-meteo.com/v1/forecast?latitude=10.8031&longitude=106.7324&daily=precipitation_sum,precipitation_probability_max&timezone=Asia%2FBangkok&start_date={target_date}&end_date={target_date}"
@@ -135,7 +143,7 @@ def fetch_pdf_for_date(target_date):
   return None, None
 
 
-# 4. PHÂN TÍCH VÀ ĐỀ XUẤT WFH BẰNG GEMINI FLASH DÀNH RIÊNG CHO THẢO ĐIỀN
+# 4. PHÂN TÍCH VÀ ĐỀ XUẤT WFH DÀNH RIÊNG CHO THẢO ĐIỀN BẰNG GEMINI FLASH
 def analyze_thao_dien_wfh(pdf_bytes, rain_sum, rain_prob, target_date_str):
   try:
     client = genai.Client(api_key=GEMINI_API_KEY)
@@ -168,7 +176,6 @@ def analyze_thao_dien_wfh(pdf_bytes, rain_sum, rain_prob, target_date_str):
         Lưu ý: "muc_do_wfh" chỉ nhận: "DANGER", "WARNING", hoặc "SAFE".
         """
 
-    # Gọi mô hình Flash
     response = client.models.generate_content(
         model=MODEL_NAME,
         contents=[
@@ -183,12 +190,11 @@ def analyze_thao_dien_wfh(pdf_bytes, rain_sum, rain_prob, target_date_str):
     return None
 
 
-# --- KHỞI TẠO GIAO DIỆN MÀN HÌNH TV ---
+# --- GIAO DIỆN MÀN HÌNH TV 43 INCH ---
 now_vn = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
 today_date = now_vn.date()
 is_weekend = today_date.weekday() >= 5  # Thứ 7 & Chủ Nhật
 
-# HEADER GIAO DIỆN TV
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
   st.markdown(
@@ -242,7 +248,7 @@ else:
         wfh_style = "wfh-card-warning"
         wfh_icon = "⚠️"
 
-      # 1. THẺ KHUYẾN NGHỊ WFH HÀNG ĐẦU MÀN HÌNH TV
+      # 1. THẺ KHUYẾN NGHỊ WFH TRÊN TV
       st.markdown(
           f"""
             <div class="{wfh_style}">
