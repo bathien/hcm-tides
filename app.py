@@ -13,15 +13,14 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 MODEL_NAME = "gemini-3.6-flash"
 
-# 1. CẤU HÌNH GIAO DIỆN TV 43 INCH (DARK MODE TƯƠNG PHẢN CAO)
 st.set_page_config(
-    page_title="CẢNH BÁO NGẬP & WFH THẢO ĐIỀN (HÔM NAY & NEXT WORKING DAY)",
+    page_title="CẢNH BÁO NGẬP & WFH BANQUP VIETNAM",
     page_icon="🚨",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-# TỰ ĐỘNG RELOAD TRANG MỖI 60 GIÂY (60000ms) - KHÔNG CẦN CHẠM/CLICK
+# Auto refresh mỗi 60 giây
 st.components.v1.html(
     """
     <script>
@@ -33,13 +32,11 @@ st.components.v1.html(
     height=0,
 )
 
-# CSS TỐI ƯU GIAO DIỆN DẠNG SPLIT-VIEW TRÊN TV
+# CSS GIAO DIỆN MÀN HÌNH TV
 st.markdown(
     """
     <style>
         html, body, [class*="css"] { font-size: 19px !important; }
-        
-        /* Khung bao quanh từng ngày */
         .day-container {
             background-color: #0f172a;
             border-radius: 20px;
@@ -47,8 +44,6 @@ st.markdown(
             border: 2px solid #1e293b;
             box-shadow: 0 10px 30px rgba(0,0,0,0.6);
         }
-        
-        /* Metric Card thu gọn cho 2 cột */
         .metric-card-mini {
             background-color: #1e293b;
             border-radius: 12px;
@@ -60,39 +55,21 @@ st.markdown(
         .metric-title-mini { font-size: 16px; color: #94a3b8; font-weight: 600; }
         .metric-value-mini { font-size: 32px; font-weight: 900; color: #38bdf8; }
         .metric-sub-mini { font-size: 16px; color: #f1f5f9; }
-        
-        /* Style cho thẻ Khuyến nghị WFH */
         .wfh-card-danger {
             background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
-            border: 2px solid #ef4444;
-            border-radius: 14px;
-            padding: 16px;
-            color: white;
-            margin-bottom: 15px;
+            border: 2px solid #ef4444; border-radius: 14px; padding: 16px; color: white; margin-bottom: 15px;
         }
         .wfh-card-warning {
             background: linear-gradient(135deg, #713f12 0%, #854d0e 100%);
-            border: 2px solid #eab308;
-            border-radius: 14px;
-            padding: 16px;
-            color: white;
-            margin-bottom: 15px;
+            border: 2px solid #eab308; border-radius: 14px; padding: 16px; color: white; margin-bottom: 15px;
         }
         .wfh-card-safe {
             background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
-            border: 2px solid #10b981;
-            border-radius: 14px;
-            padding: 16px;
-            color: white;
-            margin-bottom: 15px;
+            border: 2px solid #10b981; border-radius: 14px; padding: 16px; color: white; margin-bottom: 15px;
         }
         .wfh-card-weekend {
             background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-            border: 2px solid #64748b;
-            border-radius: 14px;
-            padding: 16px;
-            color: #94a3b8;
-            margin-bottom: 15px;
+            border: 2px solid #64748b; border-radius: 14px; padding: 16px; color: #94a3b8; margin-bottom: 15px;
         }
     </style>
 """,
@@ -113,43 +90,47 @@ except KeyError:
   st.stop()
 
 
+# --- KIỂM TRA VÀ XÓA CACHE 11:00 AM ---
 def check_clear_cache():
   now_vn = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
   if now_vn.hour == 11 and now_vn.minute in [0, 1, 2]:
     st.cache_data.clear()
+    return True
+  return False
 
 
-check_clear_cache()
+cache_cleared = check_clear_cache()
 
 
-# HÀM TÍNH NGÀY LÀM VIỆC TIẾP THEO (NEXT WORKING DAY)
 def get_next_working_day(from_date):
-  # weekday(): 0=T2, 1=T3, 2=T4, 3=T5, 4=T6, 5=T7, 6=CN
   current_w = from_date.weekday()
-  if current_w < 4:  # Thứ 2 -> Thứ 5 -> Lấy ngày tiếp theo
+  if current_w < 4:
     return from_date + datetime.timedelta(days=1)
-  elif current_w == 4:  # Thứ 6 -> Lấy Thứ 2 tuần sau (+3 ngày)
+  elif current_w == 4:
     return from_date + datetime.timedelta(days=3)
-  elif current_w == 5:  # Thứ 7 -> Lấy Thứ 2 tuần sau (+2 ngày)
+  elif current_w == 5:
     return from_date + datetime.timedelta(days=2)
-  else:  # Chủ Nhật -> Lấy Thứ 2 tuần sau (+1 ngày)
+  else:
     return from_date + datetime.timedelta(days=1)
 
 
-# LẤY THỜI TIẾT MƯA TẠI TỌA ĐỘ THẢO ĐIỀN (10.8031, 106.7324)
+# HÀM LẤY MƯA CÓ GHI THỜI GIAN CACHE
 @st.cache_data(ttl=3600)
 def fetch_weather_thao_dien(target_date_str):
   url = f"https://api.open-meteo.com/v1/forecast?latitude=10.8031&longitude=106.7324&daily=precipitation_sum,precipitation_probability_max&timezone=Asia%2FBangkok&start_date={target_date_str}&end_date={target_date_str}"
+  fetch_time = (
+      datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+  ).strftime("%H:%M:%S")
   try:
     res = requests.get(url, timeout=5)
     if res.status_code == 200:
       data = res.json()
       rain_sum = data["daily"]["precipitation_sum"][0]
       rain_prob = data["daily"]["precipitation_probability_max"][0]
-      return rain_sum, rain_prob
+      return rain_sum, rain_prob, fetch_time
   except Exception:
     pass
-  return 0, 0
+  return 0, 0, fetch_time
 
 
 def build_pdf_url(target_date):
@@ -159,29 +140,32 @@ def build_pdf_url(target_date):
   return f"{BASE_DOMAIN}/phocadownload/{yyyy}/{mm}-{yyyy}/HCMC_TVHN_{yyyy}{mm}{dd}.pdf"
 
 
+# HÀM LẤY PDF CÓ GHI THỜI GIAN CACHE
 @st.cache_data(ttl=1800)
 def fetch_latest_pdf(today_date):
+  fetch_time = (
+      datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+  ).strftime("%H:%M:%S")
   for i in range(5):
     check_date = today_date - datetime.timedelta(days=i)
     pdf_url = build_pdf_url(check_date)
     try:
       res = requests.get(pdf_url, headers=HEADERS, timeout=5, verify=False)
       if res.status_code == 200 and len(res.content) > 1000:
-        return pdf_url, check_date, res.content
+        return pdf_url, check_date, res.content, fetch_time
     except Exception:
       continue
-  return None, None, None
+  return None, None, None, fetch_time
 
 
-# AI PHÂN TÍCH VÀ ĐỀ XUẤT CHO HÔM NAY VÀ NEXT WORKING DAY
 def analyze_workdays_wfh(pdf_bytes, today_date, next_workday, pdf_date):
   try:
     client = genai.Client(api_key=GEMINI_API_KEY)
 
-    r_sum_today, r_prob_today = fetch_weather_thao_dien(
+    r_sum_today, r_prob_today, _ = fetch_weather_thao_dien(
         today_date.strftime("%Y-%m-%d")
     )
-    r_sum_next, r_prob_next = fetch_weather_thao_dien(
+    r_sum_next, r_prob_next, _ = fetch_weather_thao_dien(
         next_workday.strftime("%Y-%m-%d")
     )
 
@@ -190,7 +174,7 @@ def analyze_workdays_wfh(pdf_bytes, today_date, next_workday, pdf_date):
         Tệp PDF thủy văn phát hành ngày {pdf_date.strftime('%d/%m/%Y')}. 
         Hãy phân tích dữ liệu cho 2 mốc thời gian:
         1. Hôm nay ({today_date.strftime('%d/%m/%Y')}): Mưa dự báo {r_sum_today}mm, Xác suất {r_prob_today}%.
-        2. Ngày làm việc tiếp theo ({next_workday.strftime('%d/%m/%Y')}): Mưa dự báo {r_sum_next}mm, Xác suất {r_prob_next}%.
+        2. Next Working Day ({next_workday.strftime('%d/%m/%Y')}): Mưa dự báo {r_sum_next}mm, Xác suất {r_prob_next}%.
 
         Đặc thù Thảo Điền: Ven sông Sài Gòn, ngập sâu khi Triều cường Phú An >= 1.60m (BD3) hoặc (>= 1.50m BD2 + Mưa > 15mm).
 
@@ -236,12 +220,11 @@ def analyze_workdays_wfh(pdf_bytes, today_date, next_workday, pdf_date):
     return None
 
 
-# --- GIAO DIỆN CHÍNH SPLIT-VIEW ---
+# --- GIAO DIỆN CHÍNH ---
 now_vn = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
 today_date = now_vn.date()
 next_workday = get_next_working_day(today_date)
 
-# HEADER DASHBOARD TV
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
   st.markdown(
@@ -259,7 +242,10 @@ with col_h2:
 st.markdown("---")
 
 with st.spinner("Đang đồng bộ dữ liệu Thủy văn & Thời tiết mưa..."):
-  pdf_url, pdf_date, pdf_bytes = fetch_latest_pdf(today_date)
+  pdf_url, pdf_date, pdf_bytes, pdf_fetch_time = fetch_latest_pdf(today_date)
+  _, _, weather_fetch_time = fetch_weather_thao_dien(
+      today_date.strftime("%Y-%m-%d")
+  )
 
 if pdf_bytes:
   two_days_data = analyze_workdays_wfh(
@@ -280,7 +266,7 @@ if pdf_bytes:
       col = item_info["col"]
       is_wknd = d_obj.weekday() >= 5
 
-      r_sum, r_prob = fetch_weather_thao_dien(d_obj.strftime("%Y-%m-%d"))
+      r_sum, r_prob, _ = fetch_weather_thao_dien(d_obj.strftime("%Y-%m-%d"))
 
       with col:
         st.markdown('<div class="day-container">', unsafe_allow_html=True)
@@ -321,7 +307,6 @@ if pdf_bytes:
               unsafe_allow_html=True,
           )
 
-        # 4 THẺ CHỈ SỐ CHO MỖI NGÀY
         mc1, mc2 = st.columns(2)
         with mc1:
           st.markdown(
@@ -364,3 +349,18 @@ if pdf_bytes:
     st.error("Không thể bóc tách dữ liệu cho 2 ngày.")
 else:
   st.error("Không tìm thấy tệp PDF dự báo thủy văn nào.")
+
+# --- KIỂM TRA TRẠNG THÁI CACHE ---
+with st.expander("🔍 KIỂM TRA HOẠT ĐỘNG CACHE VÀ TỰ ĐỘNG REFRESH"):
+  col_c1, col_c2, col_c3 = st.columns(3)
+  with col_c1:
+    st.write(f"⏱️ **Lần tải PDF gần nhất:** `{pdf_fetch_time}`")
+    st.caption("(Giữ nguyên trong 30 phút/1800s)")
+  with col_c2:
+    st.write(f"🌤️ **Lần tải Thời tiết gần nhất:** `{weather_fetch_time}`")
+    st.caption("(Giữ nguyên trong 60 phút/3600s)")
+  with col_c3:
+    st.write(f"🔄 **Xóa Cache 11:00 AM:** `{'ĐÃ XÓA' if cache_cleared else 'CHỜ ĐẾN 11:00'}`")
+    if st.button("🧹 Nút xóa Cache thủ công (Test)"):
+      st.cache_data.clear()
+      st.rerun()
