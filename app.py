@@ -231,7 +231,7 @@ for idx in range(3):
 
   # SỬ DỤNG BẢNG HTML4 CỔ ĐIỂN - GÓC VUÔNG TUYỆT ĐỐI (NO BORDER-RADIUS)
   cards_code += f"""
-    <td width="33%" valign="top" style="padding: 2px;">
+    <td width="33%" valign="top" style="padding: 2px; height::1000px">
         <table width="100%" border="0" cellspacing="0" cellpadding="4" style="background-color: #0f172a;">
             <tr>
                 <td align="center" style="font-size: 13px; font-weight: bold; color: #f8fafc; background-color: #1e293b;">
