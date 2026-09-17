@@ -2,14 +2,12 @@ import datetime
 import io
 import json
 import re
-import pandas as pd
 import requests
 import streamlit as st
 import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# CONFIGURATION
 MODEL_NAME = "gemini-3.6-flash"
 BASE_DOMAIN = "https://www.phongchonglutbaotphcm.gov.vn"
 HEADERS = {
@@ -18,7 +16,6 @@ HEADERS = {
     )
 }
 
-# 1. PAGE SETUP
 st.set_page_config(
     page_title="CẢNH BÁO NGẬP & WFH Banqup VN",
     page_icon="🚨",
@@ -26,23 +23,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# 2. SAFE SECRETS EXTRACTION
-GEMINI_API_KEY = None
-ADMIN_PASSWORD = None
-
-try:
-  if "GEMINI_API_KEY" in st.secrets:
-    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-  if "ADMIN_PASSWORD" in st.secrets:
-    ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
-except Exception:
-  pass
-
-if not GEMINI_API_KEY:
-  st.error("⚠️ LỖI CẤU HÌNH: Chưa cài đặt GEMINI_API_KEY trong Secrets.")
-  st.stop()
-
-# 3. GLOBAL CSS OVERRIDE - TRIỆT TIỆU TOÀN BỘ PADDING CỦA STREAMLIT
+# TRIỆT TIỆU TOÀN BỘ PADDING/MARGIN CỦA STREAMLIT
 st.markdown(
     """
     <style>
@@ -54,22 +35,24 @@ st.markdown(
             padding: 0 !important;
         }
         header, footer, #MainMenu { visibility: hidden !important; display: none !important; }
-        .block-container { padding: 4px 8px !important; margin: 0 !important; max-width: 100% !important; }
+        .block-container { padding: 4px 6px !important; margin: 0 !important; max-width: 100% !important; }
         div.stButton > button {
-            width: 100%;
-            background-color: #0284c7 !important;
-            color: #ffffff !important;
-            border-radius: 4px !important;
-            border: none !important;
-            font-size: 11px !important;
+            width: 100%; background-color: #0284c7 !important; color: #ffffff !important;
+            border-radius: 4px !important; border: none !important; font-size: 11px !important;
         }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY")
+ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
 
-# 4. HELPER FUNCTIONS
+if not GEMINI_API_KEY:
+  st.error("⚠️ LỖI CẤU HÌNH: Chưa cài đặt GEMINI_API_KEY trong Secrets.")
+  st.stop()
+
+
 def get_three_workdays(from_date):
   workdays = []
   current = from_date
@@ -89,18 +72,11 @@ def fetch_hourly_weather_thao_dien(target_date_str):
       data = res.json()
       precip = data["hourly"]["precipitation"]
       prob = data["hourly"]["precipitation_probability"]
-
-      morning_rain = round(sum(precip[7:10]), 1)
-      morning_prob = max(prob[7:10]) if prob[7:10] else 0
-
-      evening_rain = round(sum(precip[17:20]), 1)
-      evening_prob = max(prob[17:20]) if prob[17:20] else 0
-
       return {
-          "morning_rain": morning_rain,
-          "morning_prob": morning_prob,
-          "evening_rain": evening_rain,
-          "evening_prob": evening_prob,
+          "morning_rain": round(sum(precip[7:10]), 1),
+          "morning_prob": max(prob[7:10]) if prob[7:10] else 0,
+          "evening_rain": round(sum(precip[17:20]), 1),
+          "evening_prob": max(prob[17:20]) if prob[17:20] else 0,
       }
   except Exception:
     pass
@@ -113,10 +89,7 @@ def fetch_hourly_weather_thao_dien(target_date_str):
 
 
 def build_pdf_url(target_date):
-  yyyy = target_date.strftime("%Y")
-  mm = target_date.strftime("%m")
-  dd = target_date.strftime("%d")
-  return f"{BASE_DOMAIN}/phocadownload/{yyyy}/{mm}-{yyyy}/HCMC_TVHN_{yyyy}{mm}{dd}.pdf"
+  return f"{BASE_DOMAIN}/phocadownload/{target_date.strftime('%Y')}/{target_date.strftime('%m-%Y')}/HCMC_TVHN_{target_date.strftime('%Y%m%d')}.pdf"
 
 
 @st.cache_data(ttl=86400)
@@ -169,61 +142,23 @@ def analyze_three_workdays_wfh_cached(
           "ly_do_wfh": "Dữ liệu đang được cập nhật...",
       },
   ]
-
   if not pdf_bytes or len(pdf_bytes) < 100:
     return fallback_response
-
   try:
     from google import genai
     from google.genai import types
 
     client = genai.Client(api_key=api_key)
-
     prompt = f"""
         Bạn là chuyên gia phân tích rủi ro ngập lụt khu vực THẢO ĐIỀN (TP. Thủ Đức, TP.HCM) cho công ty Banqup VN.
-        Tệp PDF thủy văn phát hành ngày {pdf_date_str}.
-        Dữ liệu thời tiết 3 ngày làm việc (mưa ca sáng 7h-9h & mưa ca chiều 17h-19h): {dates_info_json}
-
-        1. Nguyên nhân kỹ thuật ngập Thảo Điền: Địa hình lòng chảo (0.5m - 1.2m), bao bọc 3 mặt bởi sông Sài Gòn. Tác động kép Mưa + Triều Phú An >= 1.6m (BD3) gây khóa cống xả.
-        2. Mức độ ngập:
-           - < 30mm: Ngập nhẹ (10-20cm) tại Quốc Hương, Đỗ Quang.
-           - 30-50mm: Ngập vừa (20-40cm) tại Nguyễn Văn Hưởng, Xuân Thủy, Tống Hữu Định (chết máy).
-           - > 50mm: Ngập sâu (40-70cm) tại Nguyễn Văn Hưởng, Quốc Hương, Thảo Điền, Lê Văn Miến.
-           - Mưa > 50mm + Triều BD3 (>=1.6m): NGẬP CỰC NẶNG (>70cm), tê liệt hoàn toàn.
-
-        Trích xuất đỉnh triều trạm PHÚ AN từ PDF, kết hợp mưa ca sáng/chiều và đưa ra gợi ý WFH.
+        Tệp PDF thủy văn phát hành ngày {pdf_date_str}. Dữ liệu thời tiết: {dates_info_json}
+        Đặc thù: Địa hình lòng chảo, bao bọc 3 mặt bởi sông Sài Gòn. Tác động kép Mưa + Triều Phú An >= 1.6m (BD3) gây ngập cực nặng.
+        Trích xuất đỉnh triều trạm PHÚ AN, kết hợp mưa ca sáng (7h-9h)/chiều (17h-19h) và đưa ra gợi ý WFH.
         Trả về ĐÚNG CẤU TRÚC JSON MẢNG:
         [
-            {{
-                "ngay": "DD/MM/YYYY",
-                "label": "HÔM NAY",
-                "dinh_trieu": "1.68m",
-                "gio_dinh_trieu": "17h30",
-                "bao_dong": "BD3",
-                "khuyen_nghi_wfh": "NÊN LÀM VIỆC TẠI NHÀ (WFH)",
-                "muc_do_wfh": "DANGER",
-                "ly_do_wfh": "Triều BD3 (17h30) kết hợp mưa ca chiều >30mm gây ngập sâu 20-40cm tại Nguyễn Văn Hưởng, Xuân Thủy."
-            }},
-            {{
-                "ngay": "DD/MM/YYYY",
-                "label": "NEXT WORKDAY 1",
-                "dinh_trieu": "1.62m",
-                "gio_dinh_trieu": "18h10",
-                "bao_dong": "BD3",
-                "khuyen_nghi_wfh": "CÂN NHẮC WFH",
-                "muc_do_wfh": "WARNING",
-                "ly_do_wfh": "Triều BD3 lúc 18h10 nguy cơ ngập nhẹ đường Quốc Hương, Đỗ Quang ca đi về."
-            }},
-            {{
-                "ngay": "DD/MM/YYYY",
-                "label": "NEXT WORKDAY 2",
-                "dinh_trieu": "1.52m",
-                "gio_dinh_trieu": "19h00",
-                "bao_dong": "BD2",
-                "khuyen_nghi_wfh": "ĐẾN VĂN PHÒNG",
-                "muc_do_wfh": "SAFE",
-                "ly_do_wfh": "Thời tiết thuận lợi cả 2 ca đi lại, triều thấp."
-            }}
+            {{"ngay": "DD/MM/YYYY", "label": "HÔM NAY", "dinh_trieu": "1.68m", "gio_dinh_trieu": "17h30", "bao_dong": "BD3", "khuyen_nghi_wfh": "NÊN LÀM VIỆC TẠI NHÀ (WFH)", "muc_do_wfh": "DANGER", "ly_do_wfh": "Triều BD3 (17h30) kết hợp mưa ca chiều >30mm gây ngập sâu."}},
+            {{"ngay": "DD/MM/YYYY", "label": "NEXT WORKDAY 1", "dinh_trieu": "1.62m", "gio_dinh_trieu": "18h10", "bao_dong": "BD3", "khuyen_nghi_wfh": "CÂN NHẮC WFH", "muc_do_wfh": "WARNING", "ly_do_wfh": "Triều BD3 lúc 18h10 nguy cơ ngập nhẹ ca đi về."}},
+            {{"ngay": "DD/MM/YYYY", "label": "NEXT WORKDAY 2", "dinh_trieu": "1.52m", "gio_dinh_trieu": "19h00", "bao_dong": "BD2", "khuyen_nghi_wfh": "ĐẾN VĂN PHÒNG", "muc_do_wfh": "SAFE", "ly_do_wfh": "Thời tiết thuận lợi cả 2 ca đi lại."}}
         ]
         """
     response = client.models.generate_content(
@@ -233,9 +168,8 @@ def analyze_three_workdays_wfh_cached(
             prompt,
         ],
     )
-    raw_text = response.text
-    json_match = re.search(r"\[.*\]", raw_text, re.DOTALL)
-    clean_json = json_match.group(0) if json_match else raw_text.strip()
+    json_match = re.search(r"\[.*\]", response.text, re.DOTALL)
+    clean_json = json_match.group(0) if json_match else response.text.strip()
     return json.loads(clean_json)
   except Exception:
     return fallback_response
@@ -254,7 +188,6 @@ def request_clear_cache_dialog():
       st.error("❌ Mật khẩu không chính xác.")
 
 
-# 5. DATA PROCESSING
 now_vn = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
 today_date = now_vn.date()
 three_workdays = get_three_workdays(today_date)
@@ -278,13 +211,12 @@ pdf_date_label = (
     if pdf_date
     else today_date.strftime("%d/%m/%Y")
 )
-
 three_days_data = analyze_three_workdays_wfh_cached(
     pdf_bytes, dates_info_json, pdf_date_label, GEMINI_API_KEY
 )
 
-# 6. DỰNG NGUYÊN KHỐI HTML TÍNH TỐI ƯU SIÊU NHỎ CHO TIZEN 3.5
-table_cells_html = ""
+# RENDER BẢNG HTML PHẲNG HOÀN TOÀN TƯƠNG THÍCH 100% TIZEN 3.5 (NO NESTED TABLES)
+cols_html = ""
 for idx in range(3):
   item = (
       three_days_data[idx]
@@ -303,73 +235,50 @@ for idx in range(3):
     card_bg_color = "#854d0e"
     wfh_icon = "⚠️"
 
-  table_cells_html += f"""
-    <td width="33%" valign="top" style="padding: 2px;">
-        <div style="background-color: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 6px;">
-            <div style="color: #f8fafc; font-weight: bold; font-size: 13px; text-align: center; margin-bottom: 4px;">
+  cols_html += f"""
+    <td width="33%" valign="top" style="padding: 3px;">
+        <div style="background-color: #0f172a; border: 1px solid #1e293b; padding: 6px;">
+            <p style="color: #f8fafc; font-weight: bold; font-size: 13px; text-align: center; margin: 0 0 4px 0;">
                 📌 {item.get('label', '')} ({d_obj.strftime('%d/%m')})
-            </div>
+            </p>
             
-            <div style="background-color: {card_bg_color}; border-radius: 4px; padding: 6px; color: #ffffff; margin-bottom: 6px;">
-                <div style="font-size: 9px; font-weight: bold; text-transform: uppercase;">KHUYẾN NGHỊ LÀM VIỆC:</div>
-                <div style="font-size: 13px; font-weight: bold; margin: 2px 0;">{wfh_icon} {item.get('khuyen_nghi_wfh', 'N/A')}</div>
-                <div style="font-size: 9px; line-height: 1.1;">👉 {item.get('ly_do_wfh', 'N/A')}</div>
+            <div style="background-color: {card_bg_color}; padding: 6px; color: #ffffff; margin-bottom: 6px;">
+                <p style="font-size: 9px; font-weight: bold; margin: 0; text-transform: uppercase;">KHUYẾN NGHỊ LÀM VIỆC:</p>
+                <p style="font-size: 13px; font-weight: bold; margin: 2px 0;">{wfh_icon} {item.get('khuyen_nghi_wfh', 'N/A')}</p>
+                <p style="font-size: 9px; margin: 0; line-height: 1.1;">👉 {item.get('ly_do_wfh', 'N/A')}</p>
             </div>
 
-            <table width="100%" border="0" cellspacing="2" cellpadding="0">
-                <tr>
-                    <td width="50%" align="center" style="background-color: #1e293b; padding: 4px; border-radius: 3px;">
-                        <div style="font-size: 8px; color: #94a3b8;">🌊 ĐỈNH TRIỀU</div>
-                        <div style="font-size: 12px; font-weight: bold; color: #38bdf8;">{item.get('dinh_trieu', 'N/A')}</div>
-                        <div style="font-size: 8px; color: #f1f5f9;">⏰ {item.get('gio_dinh_trieu', 'N/A')}</div>
-                    </td>
-                    <td width="50%" align="center" style="background-color: #1e293b; padding: 4px; border-radius: 3px;">
-                        <div style="font-size: 8px; color: #94a3b8;">🚨 BÁO ĐỘNG</div>
-                        <div style="font-size: 12px; font-weight: bold; color: #ef4444;">{item.get('bao_dong', 'N/A')}</div>
-                        <div style="font-size: 8px; color: #f1f5f9;">Trạm Phú An</div>
-                    </td>
-                </tr>
-                <tr>
-                    <td width="50%" align="center" style="background-color: #1e293b; padding: 4px; border-radius: 3px;">
-                        <div style="font-size: 8px; color: #94a3b8;">🌅 SÁNG (7h-9h)</div>
-                        <div style="font-size: 12px; font-weight: bold; color: #60a5fa;">{w_data['morning_rain']} mm</div>
-                        <div style="font-size: 8px; color: #f1f5f9;">☔ {w_data['morning_prob']}%</div>
-                    </td>
-                    <td width="50%" align="center" style="background-color: #1e293b; padding: 4px; border-radius: 3px;">
-                        <div style="font-size: 8px; color: #94a3b8;">🌇 CHIỀU (17h-19h)</div>
-                        <div style="font-size: 12px; font-weight: bold; color: #a78bfa;">{w_data['evening_rain']} mm</div>
-                        <div style="font-size: 8px; color: #f1f5f9;">☔ {w_data['evening_prob']}%</div>
-                    </td>
-                </tr>
-            </table>
+            <!-- DÙNG PHẲNG KHÔNG LỒNG TABLE -->
+            <p style="background-color: #1e293b; padding: 4px; margin: 0 0 3px 0; font-size: 10px; color: #94a3b8; text-align: center;">
+                🌊 TRIỀU: <b style="color: #38bdf8; font-size: 12px;">{item.get('dinh_trieu', 'N/A')}</b> (⏰ {item.get('gio_dinh_trieu', 'N/A')}) | <b style="color: #ef4444;">{item.get('bao_dong', 'N/A')}</b>
+            </p>
+            <p style="background-color: #1e293b; padding: 4px; margin: 0 0 3px 0; font-size: 10px; color: #94a3b8; text-align: center;">
+                🌅 SÁNG (7h-9h): <b style="color: #60a5fa; font-size: 12px;">{w_data['morning_rain']} mm</b> (☔ {w_data['morning_prob']}%)
+            </p>
+            <p style="background-color: #1e293b; padding: 4px; margin: 0; font-size: 10px; color: #94a3b8; text-align: center;">
+                🌇 CHIỀU (17h-19h): <b style="color: #a78bfa; font-size: 12px;">{w_data['evening_rain']} mm</b> (☔ {w_data['evening_prob']}%)
+            </p>
         </div>
     </td>
     """
 
 full_dashboard_html = f"""
-<div style="background-color: #030712; padding: 4px; margin: 0;">
-    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 4px;">
-        <tr>
-            <td style="font-size: 15px; font-weight: bold; color: #38bdf8;">
-                🚨 CẢNH BÁO NGẬP & WFH Banqup VN
-            </td>
-            <td align="right" style="font-size: 10px; color: #94a3b8;">
-                🕒 {now_vn.strftime('%H:%M:%S')} | 📅 {now_vn.strftime('%d/%m/%Y')}
-            </td>
-        </tr>
-    </table>
+<div style="background-color: #030712; padding: 2px;">
+    <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: bold; color: #38bdf8;">
+        🚨 CẢNH BÁO NGẬP & WFH Banqup VN 
+        <span style="font-size: 10px; color: #94a3b8; float: right;">🕒 {now_vn.strftime('%H:%M:%S')} | 📅 {now_vn.strftime('%d/%m/%Y')}</span>
+    </p>
 
     <table width="100%" border="0" cellspacing="0" cellpadding="0">
         <tr>
-            {table_cells_html}
+            {cols_html}
         </tr>
     </table>
 </div>
 """
 
-# ĐƯA TOÀN BỘ DASHBOARD VÀO RENDER QUA ST.MARKDOWN TRỰC TIẾP
+# OUTPUT SINGLE RAW HTML DIRECTLY TO STREAMLIT
 st.markdown(full_dashboard_html, unsafe_allow_html=True)
 
-# ADMIN ACTION BUTTON
 if st.button("🔄 Làm mới dữ liệu ngay"):
   request_clear_cache_dialog()
