@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Tự động refresh trang mỗi 5 phút để luôn cập nhật dữ liệu mới -->
+    <meta http-equiv="refresh" content="300">
+    <title>CẢNH BÁO NGẬP & WFH Banqup VN</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #030712;
+            color: #f8fafc;
+            font-family: Arial, Helvetica, sans-serif;
+            padding: 16px;
+            overflow: hidden;
+        }
+        .header {
+            display: table;
+            width: 100%;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #334155;
+            padding-bottom: 8px;
+        }
+        .header-title {
+            display: table-cell;
+            font-size: 24px;
+            font-weight: bold;
+            color: #38bdf8;
+        }
+        .header-time {
+            display: table-cell;
+            text-align: right;
+            font-size: 16px;
+            color: #94a3b8;
+        }
+        .grid-container {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
+        }
+        .col {
+            display: table-cell;
+            width: 33.33%;
+            padding: 0 8px;
+            vertical-align: top;
+        }
+        .card {
+            background-color: #0f172a;
+            border: 2px solid #1e293b;
+            border-radius: 8px;
+            padding: 12px;
+        }
+        .card-title {
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .wfh-box {
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            color: #ffffff;
+        }
+        .wfh-lbl { font-size: 11px; font-weight: bold; text-transform: uppercase; }
+        .wfh-val { font-size: 18px; font-weight: bold; margin: 4px 0; }
+        .wfh-desc { font-size: 12px; line-height: 1.3; }
+        
+        .metric-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 6px;
+        }
+        .metric-box {
+            background-color: #1e293b;
+            padding: 8px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .m-lbl { font-size: 10px; color: #94a3b8; }
+        .m-val { font-size: 20px; font-weight: bold; margin: 2px 0; }
+        .m-sub { font-size: 10px; color: #f1f5f9; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-title">🚨 CẢNH BÁO NGẬP & WFH Banqup VN</div>
+        <div class="header-time">🕒 {{ now_time }} | 📅 {{ now_date }}</div>
+    </div>
+
+    <div class="grid-container">
+        {% for c in cards %}
+        <div class="col">
+            <div class="card">
+                <div class="card-title">📌 {{ c.label }} ({{ c.date_str }})</div>
+                
+                <div class="wfh-box" style="background-color: {{ c.bg_color }};">
+                    <div class="wfh-lbl">KHUYẾN NGHỊ LÀM VIỆC:</div>
+                    <div class="wfh-val">{{ c.icon }} {{ c.wfh_status }}</div>
+                    <div class="wfh-desc">👉 {{ c.wfh_reason }}</div>
+                </div>
+
+                <table class="metric-table">
+                    <tr>
+                        <td width="50%" class="metric-box">
+                            <div class="m-lbl">🌊 ĐỈNH TRIỀU</div>
+                            <div class="m-val" style="color: #38bdf8;">{{ c.dinh_trieu }}</div>
+                            <div class="m-sub">⏰ {{ c.gio_trieu }}</div>
+                        </td>
+                        <td width="50%" class="metric-box">
+                            <div class="m-lbl">🚨 BÁO ĐỘNG</div>
+                            <div class="m-val" style="color: #ef4444;">{{ c.bao_dong }}</div>
+                            <div class="m-sub">Trạm Phú An</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="metric-box">
+                            <div class="m-lbl">🌅 SÁNG (7h-9h)</div>
+                            <div class="m-val" style="color: #60a5fa;">{{ c.morning_rain }} mm</div>
+                            <div class="m-sub">☔ XS {{ c.morning_prob }}%</div>
+                        </td>
+                        <td class="metric-box">
+                            <div class="m-lbl">🌇 CHIỀU (17h-19h)</div>
+                            <div class="m-val" style="color: #a78bfa;">{{ c.evening_rain }} mm</div>
+                            <div class="m-sub">☔ XS {{ c.evening_prob }}%</div>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+</body>
+</html>
