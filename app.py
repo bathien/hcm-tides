@@ -25,7 +25,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# 2. CHECK SECRETS
+# 2. CHECK SECRETS SAFELY
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY")
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
 
@@ -198,26 +198,9 @@ three_days_data = analyze_three_workdays_wfh_cached(
     pdf_bytes, dates_info_json, pdf_date_label, GEMINI_API_KEY
 )
 
-# 5. HEADER UI (NATIVE STREAMLIT)
-head_col1, head_col2, head_col3 = st.columns([3, 1, 1])
-
-with head_col1:
-  st.title("🚨 CẢNH BÁO NGẬP & WFH Banqup VN")
-
-with head_col2:
-  st.caption(
-      f"🕒 {now_vn.strftime('%H:%M:%S')} | 📅 {now_vn.strftime('%d/%m/%Y')}"
-  )
-
-with head_col3:
-  if st.button("🔄 Làm mới dữ liệu"):
-    request_clear_cache_dialog()
-
-st.divider()
-
-# 6. BODY UI (NATIVE STREAMLIT COMPONENTS ONLY)
-cols = st.columns(3)
-
+# 5. DỰNG CANVAS HTML SIÊU BẸT VÀ PHẲNG NATIVE CHO ST.HTML()
+# Không dùng CSS Flexbox, không dùng div lồng phức tạp. Sử dụng Table tiêu chuẩn Chromium v47.
+cards_code = ""
 for idx in range(3):
   item = (
       three_days_data[idx]
@@ -227,52 +210,88 @@ for idx in range(3):
   d_obj = three_workdays[idx]
   w_data = fetch_hourly_weather_thao_dien(d_obj.strftime("%Y-%m-%d"))
 
-  status = item.get("muc_do_wfh", "SAFE")
+  card_bg_color = "#065f46"  # Xanh
+  wfh_icon = "✅"
+  if item.get("muc_do_wfh") == "DANGER":
+    card_bg_color = "#991b1b"  # Đỏ
+    wfh_icon = "🚨"
+  elif item.get("muc_do_wfh") == "WARNING":
+    card_bg_color = "#854d0e"  # Cam/Vàng
+    wfh_icon = "⚠️"
 
-  with cols[idx]:
-    with st.container(border=True):
-      st.subheader(f"📌 {item.get('label', '')} ({d_obj.strftime('%d/%m')})")
+  cards_code += f"""
+    <td width="33%" valign="top" style="padding: 2px;">
+        <table width="100%" border="0" cellspacing="0" cellpadding="6" style="background-color: #0f172a; border: 1px solid #1e293b;">
+            <tr>
+                <td align="center" style="font-size: 14px; font-weight: bold; color: #f8fafc; border-bottom: 1px solid #1e293b;">
+                    📌 {item.get('label', '')} ({d_obj.strftime('%d/%m')})
+                </td>
+            </tr>
+            <tr>
+                <td style="background-color: {card_bg_color}; color: #ffffff;">
+                    <div style="font-size: 10px; font-weight: bold;">KHUYẾN NGHỊ LÀM VIỆC:</div>
+                    <div style="font-size: 14px; font-weight: bold; margin: 2px 0;">{wfh_icon} {item.get('khuyen_nghi_wfh', 'N/A')}</div>
+                    <div style="font-size: 10px;">👉 {item.get('ly_do_wfh', 'N/A')}</div>
+                </td>
+            </tr>
+            <tr>
+                <td style="background-color: #1e293b; font-size: 11px; color: #94a3b8; border-bottom: 1px solid #0f172a;">
+                    🌊 TRIỀU: <b style="color: #38bdf8;">{item.get('dinh_trieu', 'N/A')}</b> (⏰ {item.get('gio_dinh_trieu', 'N/A')}) | <b style="color: #ef4444;">{item.get('bao_dong', 'N/A')}</b>
+                </td>
+            </tr>
+            <tr>
+                <td style="background-color: #1e293b; font-size: 11px; color: #94a3b8; border-bottom: 1px solid #0f172a;">
+                    🌅 SÁNG (7h-9h): <b style="color: #60a5fa;">{w_data['morning_rain']} mm</b> (☔ {w_data['morning_prob']}%)
+                </td>
+            </tr>
+            <tr>
+                <td style="background-color: #1e293b; font-size: 11px; color: #94a3b8;">
+                    🌇 CHIỀU (17h-19h): <b style="color: #a78bfa;">{w_data['evening_rain']} mm</b> (☔ {w_data['evening_prob']}%)
+                </td>
+            </tr>
+        </table>
+    </td>
+    """
 
-      # Callout Box thay thế thẻ HTML nhiều màu
-      wfh_msg = f"**{item.get('khuyen_nghi_wfh', 'N/A')}**\n\n👉 {item.get('ly_do_wfh', 'N/A')}"
-      if status == "DANGER":
-        st.error(f"🚨 {wfh_msg}")
-      elif status == "WARNING":
-        st.warning(f"⚠️ {wfh_msg}")
-      else:
-        st.success(f"✅ {wfh_msg}")
+pure_tizen_canvas = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    body {{
+        background-color: #030712;
+        color: #f8fafc;
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 4px;
+    }}
+</style>
+</head>
+<body>
+    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 6px;">
+        <tr>
+            <td style="font-size: 16px; font-weight: bold; color: #38bdf8;">
+                🚨 CẢNH BÁO NGẬP & WFH Banqup VN
+            </td>
+            <td align="right" style="font-size: 11px; color: #94a3b8;">
+                🕒 {now_vn.strftime('%H:%M:%S')} | 📅 {now_vn.strftime('%d/%m/%Y')}
+            </td>
+        </tr>
+    </table>
 
-      st.markdown("---")
+    <table width="100%" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+            {cards_code}
+        </tr>
+    </table>
+</body>
+</html>
+"""
 
-      # Trích xuất thông số dùng st.metric gốc
-      m1, m2 = st.columns(2)
-      with m1:
-        st.metric(
-            label="🌊 ĐỈNH TRIỀU PHÚ AN",
-            value=item.get("dinh_trieu", "N/A"),
-            delta=f"⏰ {item.get('gio_dinh_trieu', 'N/A')}",
-            delta_color="off",
-        )
-      with m2:
-        st.metric(
-            label="🚨 BÁO ĐỘNG",
-            value=item.get("bao_dong", "N/A"),
-            delta="Trạm Phú An",
-            delta_color="off",
-        )
+# OUTPUT TRỰC TIẾP QUA ST.HTML VỚI ĐỊNH DẠNG FULL CANVAS TIZEN
+st.html(pure_tizen_canvas)
 
-      m3, m4 = st.columns(2)
-      with m3:
-        st.metric(
-            label="🌅 SÁNG (7h-9h)",
-            value=f"{w_data['morning_rain']} mm",
-            delta=f"☔ XS {w_data['morning_prob']}%",
-            delta_color="off",
-        )
-      with m4:
-        st.metric(
-            label="🌇 CHIỀU (17h-19h)",
-            value=f"{w_data['evening_rain']} mm",
-            delta=f"☔ XS {w_data['evening_prob']}%",
-            delta_color="off",
-        )
+# NÚT BẤM CLEAR CACHE ADMIN (NATIVE)
+if st.button("🔄 Làm mới dữ liệu ngay"):
+  request_clear_cache_dialog()
