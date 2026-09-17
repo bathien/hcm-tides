@@ -71,7 +71,6 @@ def get_three_workdays(from_date):
   return workdays
 
 
-# BỔ SUNG LẤY DỮ LIỆU MƯA THEO GIỜ (HOURLY RAIN) CHO CA SÁNG (7-9h) VÀ CA CHIỀU (17-19h)
 @st.cache_data(ttl=86400)
 def fetch_hourly_weather_thao_dien(target_date_str):
   url = f"https://api.open-meteo.com/v1/forecast?latitude=10.8031&longitude=106.7324&hourly=precipitation,precipitation_probability&timezone=Asia%2FBangkok&start_date={target_date_str}&end_date={target_date_str}"
@@ -82,11 +81,9 @@ def fetch_hourly_weather_thao_dien(target_date_str):
       precip = data["hourly"]["precipitation"]
       prob = data["hourly"]["precipitation_probability"]
 
-      # Ca Sáng: Giờ 7, 8, 9 (Chỉ số index 7, 8, 9 trong mảng 24h)
       morning_rain = round(sum(precip[7:10]), 1)
       morning_prob = max(prob[7:10]) if prob[7:10] else 0
 
-      # Ca Chiều: Giờ 17, 18, 19 (Chỉ số index 17, 18, 19)
       evening_rain = round(sum(precip[17:20]), 1)
       evening_prob = max(prob[17:20]) if prob[17:20] else 0
 
@@ -127,6 +124,7 @@ def fetch_latest_pdf(today_date):
   return None, None, None
 
 
+# PROMPT TỐI ƯU THEO ĐẶC THÙ KỸ THUẬT & MỤC MƯA NGẬP THẢO ĐIỀN
 @st.cache_data(ttl=86400)
 def analyze_three_workdays_wfh_cached(
     pdf_bytes, dates_info_json, pdf_date_str, api_key
@@ -174,15 +172,29 @@ def analyze_three_workdays_wfh_cached(
     client = genai.Client(api_key=api_key)
 
     prompt = f"""
-        Bạn là hệ thống AI đánh giá rủi ro ngập lụt THẢO ĐIỀN (TP. Thủ Đức, TP.HCM).
-        Tệp PDF thủy văn phát hành ngày {pdf_date_str}. 
-        Dữ liệu thời tiết chi tiết theo khung giờ đi làm (Sáng 7h-9h, Chiều 17h-19h) 3 ngày: {dates_info_json}
+        Bạn là chuyên gia phân tích rủi ro ngập lụt chuyên sâu cho khu vực THẢO ĐIỀN (TP. Thủ Đức, TP.HCM) cho công ty Banqup VN.
+        Tệp PDF thủy văn phát hành ngày {pdf_date_str}.
+        Dữ liệu thời tiết 3 ngày làm việc (mưa ca sáng 7h-9h & mưa ca chiều 17h-19h): {dates_info_json}
 
-        Nhiệm vụ: 
-        1. Trích xuất đỉnh triều trạm PHÚ AN.
-        2. Đánh giá ngập lụt ĐẶC BIỆT CHÚ Ý VÀO KHUNG GIỜ ĐI LÀM SÁNG (7h-9h) VÀ ĐI VỀ CHIỀU (17h-19h). Đưa ra khuyến nghị WFH chính xác.
+        --- TRI THỨC ĐẶC THÙ THẢO ĐIỀN ---
+        1. Nguyên nhân kỹ thuật:
+           - Địa hình lòng chảo, cao độ nền thấp (0.5m - 1.2m), bao bọc 3 mặt bởi sông Sài Gòn.
+           - Bị tác động kép: Mưa lớn + Triều cường trạm Phú An >= 1.6m (BD3) gây khóa cống xả đập, nước sông dâng ngược.
+        2. Ma trận Mưa & Mức độ ngập ảnh hưởng giao thông:
+           - Dưới 30mm: Ngập nhẹ (10-20cm) tại Quốc Hương (trước ĐH Văn Hiến), Đỗ Quang. Xe máy đi được.
+           - 30 - 50mm: Ngập vừa (20-40cm), tràn vỉa hè tại Nguyễn Văn Hưởng, Xuân Thủy, Tống Hữu Định. Xe máy bắt đầu chết máy.
+           - Trên 50mm: Ngập sâu (40-70cm) kéo dài 1-3 tiếng tại Nguyễn Văn Hưởng, Quốc Hương, Thảo Điền, Lê Văn Miến.
+           - Mưa > 50mm + Triều cường Phú An >= 1.60m (BD3): NGẬP CỰC NẶNG (>70cm), tê liệt hoàn toàn giao thông toàn khu vực Thảo Điền.
 
-        Trả về ĐÚNG CẤU TRÚC JSON MẢNG (Không có ký tự thừa):
+        --- NHIỆM VỤ ---
+        Trích xuất đỉnh triều trạm PHÚ AN từ PDF, kết hợp với dữ liệu mưa ca sáng (7h-9h) và ca chiều (17h-19h) để đánh giá khuyến nghị WFH.
+        
+        Quy tắc xếp loại "muc_do_wfh":
+        - "DANGER": Mưa >50mm HOẶC Mưa >30mm trùng đỉnh triều >=1.60m (BD3) đúng khung giờ đi làm/về (7h-9h hoặc 17h-19h).
+        - "WARNING": Mưa 30-50mm HOẶC đỉnh triều >=1.60m vào giờ cao điểm đi lại.
+        - "SAFE": Mưa <30mm và triều thấp (<1.50m).
+
+        Trả về ĐÚNG CẤU TRÚC JSON MẢNG sau (Không có ký tự thừa):
         [
             {{
                 "ngay": "DD/MM/YYYY",
@@ -192,7 +204,7 @@ def analyze_three_workdays_wfh_cached(
                 "bao_dong": "BD3",
                 "khuyen_nghi_wfh": "NÊN LÀM VIỆC TẠI NHÀ (WFH)",
                 "muc_do_wfh": "DANGER",
-                "ly_do_wfh": "Đỉnh triều BD3 trùng ca chiều (17h30) kết hợp mưa ca chiều."
+                "ly_do_wfh": "Tác động kép: Triều BD3 (17h30) kết hợp mưa ca chiều >30mm gây ngập sâu 20-40cm tại Nguyễn Văn Hưởng, Xuân Thủy."
             }},
             {{
                 "ngay": "DD/MM/YYYY",
@@ -202,7 +214,7 @@ def analyze_three_workdays_wfh_cached(
                 "bao_dong": "BD3",
                 "khuyen_nghi_wfh": "CÂN NHẮC WFH",
                 "muc_do_wfh": "WARNING",
-                "ly_do_wfh": "Nguy cơ ngập nhẹ ca đi về do đỉnh triều cao."
+                "ly_do_wfh": "Đỉnh triều BD3 lúc 18h10 nguy cơ ngập nhẹ đường Quốc Hương, Đỗ Quang ca đi về."
             }},
             {{
                 "ngay": "DD/MM/YYYY",
@@ -212,7 +224,7 @@ def analyze_three_workdays_wfh_cached(
                 "bao_dong": "BD2",
                 "khuyen_nghi_wfh": "ĐẾN VĂN PHÒNG",
                 "muc_do_wfh": "SAFE",
-                "ly_do_wfh": "Cả ca sáng và ca chiều thời tiết thuận lợi, triều thấp."
+                "ly_do_wfh": "Thời tiết ít mưa cả ca sáng lẫn chiều, triều cường không gây ngập."
             }}
         ]
         """
