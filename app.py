@@ -42,8 +42,40 @@ if not GEMINI_API_KEY:
   st.error("⚠️ LỖI CẤU HÌNH: Chưa cài đặt GEMINI_API_KEY trong Secrets.")
   st.stop()
 
+# 3. CSS ĐƠN GIẢN HÓA DÀNH RIÊNG CHO TIZEN 3.5 (KHÔNG DÙNG GRADIENT, KHÔNG HOOK COMPLEX HTML)
+st.markdown(
+    """
+    <style>
+        .stApp {
+            background-color: #030712 !important;
+        }
+        header, footer, #MainMenu { visibility: hidden !important; display: none !important; }
+        .block-container { padding: 1rem !important; }
 
-# 3. HELPER FUNCTIONS
+        /* Ép khung Container hiển thị màu solid */
+        [data-testid="stVerticalBlock"] > div {
+            border-radius: 8px;
+        }
+
+        /* Tối ưu chữ cho màn hình TV */
+        h1, h2, h3, p, span, div {
+            font-family: Arial, sans-serif !important;
+        }
+
+        div.stButton > button {
+            width: 100%;
+            background-color: #0284c7 !important;
+            color: white !important;
+            border-radius: 6px !important;
+            border: none !important;
+        }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
+
+# 4. HELPER FUNCTIONS
 def get_three_workdays(from_date):
   workdays = []
   current = from_date
@@ -203,7 +235,7 @@ def request_clear_cache_dialog():
       st.error("❌ Mật khẩu không chính xác hoặc chưa cấu hình PASSWORD.")
 
 
-# 4. FETCH DATA
+# 5. FETCH DATA
 now_vn = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
 today_date = now_vn.date()
 three_workdays = get_three_workdays(today_date)
@@ -230,8 +262,29 @@ three_days_data = analyze_three_workdays_wfh_cached(
     pdf_bytes, dates_info_json, pdf_date_label, GEMINI_API_KEY
 )
 
-# 5. RENDER HTML TIZEN 3.5 COMPATIBLE WITH SOLID HEX COLORS
-cards_html = ""
+# 6. HEADER GIAO DIỆN NATIVE
+c_head1, c_head2, c_head3 = st.columns([3, 1, 1])
+with c_head1:
+  st.markdown(
+      "<h2 style='color: #38bdf8; margin:0;'>🚨 CẢNH BÁO NGẬP & WFH Banqup"
+      " VN</h2>",
+      unsafe_allow_html=True,
+  )
+with c_head2:
+  st.markdown(
+      f"<div style='color: #94a3b8; font-size: 14px;'>🕒"
+      f" {now_vn.strftime('%H:%M:%S')}<br>📅 {now_vn.strftime('%d/%m/%Y')}</div>",
+      unsafe_allow_html=True,
+  )
+with c_head3:
+  if st.button("🔄 Làm mới"):
+    request_clear_cache_dialog()
+
+st.markdown("---")
+
+# 7. RENDER NATIVE STREAMLIT CONTAINERS (TƯƠNG THÍCH 100% TIZEN 3.5)
+cols = st.columns(3)
+
 for idx in range(3):
   item = (
       three_days_data[idx]
@@ -241,103 +294,80 @@ for idx in range(3):
   d_obj = three_workdays[idx]
   r_sum, r_prob = fetch_weather_thao_dien(d_obj.strftime("%Y-%m-%d"))
 
-  # DÙNG MÀU ĐƠN SẮC HEX (SOLID COLOR) DỄ HIỂN THỊ TRÊN TIZEN 3.5
-  bg_solid_color = "#065f46"  # Xanh lá mặc định
-  border_color = "#10b981"
+  # Xác định màu Hex đơn sắc chuẩn
+  card_bg_color = "#065f46"  # Xanh
   wfh_icon = "✅"
-
   if item.get("muc_do_wfh") == "DANGER":
-    bg_solid_color = "#991b1b"  # Đỏ
-    border_color = "#ef4444"
+    card_bg_color = "#991b1b"  # Đỏ
     wfh_icon = "🚨"
   elif item.get("muc_do_wfh") == "WARNING":
-    bg_solid_color = "#854d0e"  # Vàng đất/Cam
-    border_color = "#eab308"
+    card_bg_color = "#854d0e"  # Vàng
     wfh_icon = "⚠️"
 
-  cards_html += f"""
-    <td width="33%" valign="top" style="padding: 0 6px;">
-        <div style="background-color: #0f172a; border-radius: 12px; padding: 14px; border: 2px solid #1e293b;">
-            <h2 style="color: #f8fafc; margin: 0 0 8px 0; text-align: center; font-size: 18px;">
-                📌 {item.get('label', '')} ({d_obj.strftime('%d/%m')})
-            </h2>
-            <!-- DÙNG SOLID BACKGROUND-COLOR HOÀN TOÀN TƯƠNG THÍCH TIZEN TV -->
-            <div style="background-color: {bg_solid_color}; border: 2px solid {border_color}; border-radius: 8px; padding: 10px; color: #ffffff; margin-bottom: 10px;">
-                <div style="font-size: 11px; text-transform: uppercase; font-weight: bold;">KHUYẾN NGHỊ LÀM VIỆC:</div>
-                <div style="font-size: 18px; font-weight: 900; margin: 2px 0;">{wfh_icon} {item.get('khuyen_nghi_wfh', 'N/A')}</div>
-                <div style="font-size: 11px; line-height: 1.2;">👉 {item.get('ly_do_wfh', 'N/A')}</div>
-            </div>
-            
-            <table width="100%" cellspacing="3" cellpadding="0" border="0">
-                <tr>
-                    <td width="50%" align="center" style="background-color: #1e293b; border-radius: 6px; padding: 6px; border: 1px solid #334155;">
-                        <div style="font-size: 11px; color: #94a3b8;">🌊 ĐỈNH TRIỀU</div>
-                        <div style="font-size: 18px; font-weight: bold; color: #38bdf8;">{item.get('dinh_trieu', 'N/A')}</div>
-                        <div style="font-size: 11px; color: #f1f5f9;">⏰ <b>{item.get('gio_dinh_trieu', 'N/A')}</b></div>
-                    </td>
-                    <td width="50%" align="center" style="background-color: #1e293b; border-radius: 6px; padding: 6px; border: 1px solid #334155;">
-                        <div style="font-size: 11px; color: #94a3b8;">🚨 BÁO ĐỘNG</div>
-                        <div style="font-size: 18px; font-weight: bold; color: #ef4444;">{item.get('bao_dong', 'N/A')}</div>
-                        <div style="font-size: 11px; color: #f1f5f9;">Trạm Phú An</div>
-                    </td>
-                </tr>
-                <tr>
-                    <td width="50%" align="center" style="background-color: #1e293b; border-radius: 6px; padding: 6px; border: 1px solid #334155;">
-                        <div style="font-size: 11px; color: #94a3b8;">🌧️ MƯA DỰ BÁO</div>
-                        <div style="font-size: 18px; font-weight: bold; color: #60a5fa;">{r_sum} mm</div>
-                        <div style="font-size: 11px; color: #f1f5f9;">Thảo Điền</div>
-                    </td>
-                    <td width="50%" align="center" style="background-color: #1e293b; border-radius: 6px; padding: 6px; border: 1px solid #334155;">
-                        <div style="font-size: 11px; color: #94a3b8;">☔ XÁC SUẤT</div>
-                        <div style="font-size: 18px; font-weight: bold; color: #a78bfa;">{r_prob}%</div>
-                        <div style="font-size: 11px; color: #f1f5f9;">Mưa rào</div>
-                    </td>
-                </tr>
-            </table>
-        </div>
-    </td>
-    """
+  with cols[idx]:
+    # Sử dụng st.container() bản thể native - Không qua chuỗi HTML tổng
+    with st.container():
+      # Tiêu đề Ngày
+      st.markdown(
+          f"<h3 style='text-align: center; color: #f8fafc; margin-bottom:"
+          f" 8px;'>📌 {item.get('label', '')} ({d_obj.strftime('%d/%m')})</h3>",
+          unsafe_allow_html=True,
+      )
 
-full_page_html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <style>
-        body {{
-            background-color: #030712;
-            color: #f8fafc;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 8px;
-        }}
-    </style>
-</head>
-<body>
-    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 8px;">
-        <tr>
-            <td>
-                <h1 style="color: #38bdf8; margin: 0; font-size: 22px;">🚨 CẢNH BÁO NGẬP & WFH Banqup VN</h1>
-            </td>
-            <td align="right" style="color: #94a3b8; font-size: 14px;">
-                🕒 {now_vn.strftime('%H:%M:%S')} | 📅 {now_vn.strftime('%d/%m/%Y')}
-            </td>
-        </tr>
-    </table>
-    <hr style="border: 0; border-top: 1px solid #334155; margin-bottom: 10px;">
-    
-    <table width="100%" border="0" cellspacing="0" cellpadding="0">
-        <tr>
-            {cards_html}
-        </tr>
-    </table>
-</body>
-</html>
-"""
+      # Thẻ WFH dạng Block nhỏ đơn giản
+      st.markdown(
+          f"""
+                <div style="background-color: {card_bg_color}; padding: 10px; border-radius: 6px; color: #ffffff; margin-bottom: 10px;">
+                    <div style="font-size: 11px; font-weight: bold;">KHUYẾN NGHỊ LÀM VIỆC:</div>
+                    <div style="font-size: 18px; font-weight: bold; margin: 4px 0;">{wfh_icon} {item.get('khuyen_nghi_wfh', 'N/A')}</div>
+                    <div style="font-size: 12px;">👉 {item.get('ly_do_wfh', 'N/A')}</div>
+                </div>
+                """,
+          unsafe_allow_html=True,
+      )
 
-# OUTPUT HTML CANVAS
-st.html(full_page_html)
+      # Hiển thị 4 Chỉ số bằng layout native Streamlit
+      m_col1, m_col2 = st.columns(2)
+      with m_col1:
+        st.markdown(
+            f"""
+                <div style="background-color: #1e293b; padding: 6px; border-radius: 4px; text-align: center; margin-bottom: 6px;">
+                    <div style="font-size: 10px; color: #94a3b8;">🌊 ĐỈNH TRIỀU</div>
+                    <div style="font-size: 16px; font-weight: bold; color: #38bdf8;">{item.get('dinh_trieu', 'N/A')}</div>
+                    <div style="font-size: 10px; color: #f1f5f9;">⏰ {item.get('gio_dinh_trieu', 'N/A')}</div>
+                </div>
+                """,
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"""
+                <div style="background-color: #1e293b; padding: 6px; border-radius: 4px; text-align: center;">
+                    <div style="font-size: 10px; color: #94a3b8;">🌧️ MƯA DỰ BÁO</div>
+                    <div style="font-size: 16px; font-weight: bold; color: #60a5fa;">{r_sum} mm</div>
+                    <div style="font-size: 10px; color: #f1f5f9;">Thảo Điền</div>
+                </div>
+                """,
+            unsafe_allow_html=True,
+        )
 
-# ADMIN ACTION BUTTON
-if st.button("🔄 Làm mới dữ liệu ngay"):
-  request_clear_cache_dialog()
+      with m_col2:
+        st.markdown(
+            f"""
+                <div style="background-color: #1e293b; padding: 6px; border-radius: 4px; text-align: center; margin-bottom: 6px;">
+                    <div style="font-size: 10px; color: #94a3b8;">🚨 BÁO ĐỘNG</div>
+                    <div style="font-size: 16px; font-weight: bold; color: #ef4444;">{item.get('bao_dong', 'N/A')}</div>
+                    <div style="font-size: 10px; color: #f1f5f9;">Trạm Phú An</div>
+                </div>
+                """,
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"""
+                <div style="background-color: #1e293b; padding: 6px; border-radius: 4px; text-align: center;">
+                    <div style="font-size: 10px; color: #94a3b8;">☔ XÁC SUẤT</div>
+                    <div style="font-size: 16px; font-weight: bold; color: #a78bfa;">{r_prob}%</div>
+                    <div style="font-size: 10px; color: #f1f5f9;">Mưa rào</div>
+                </div>
+                """,
+            unsafe_allow_html=True,
+        )
