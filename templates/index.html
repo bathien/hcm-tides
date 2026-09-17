@@ -3,143 +3,225 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Tự động refresh trang mỗi 5 phút để luôn cập nhật dữ liệu mới -->
     <meta http-equiv="refresh" content="300">
     <title>CẢNH BÁO NGẬP & WFH Banqup VN</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        html, body {
             background-color: #030712;
             color: #f8fafc;
             font-family: Arial, Helvetica, sans-serif;
+            width: 100%;
+            height: 100%;
             padding: 16px;
             overflow: hidden;
         }
-        .header {
-            display: table;
+
+        /* HEADER DÙNG BẢNG HTML CỔ ĐIỂN - CHỐNG BỎNG RỚT DÒNG */
+        .header-table {
             width: 100%;
-            margin-bottom: 12px;
             border-bottom: 2px solid #334155;
-            padding-bottom: 8px;
+            padding-bottom: 12px;
+            margin-bottom: 16px;
         }
+
         .header-title {
-            display: table-cell;
-            font-size: 24px;
+            font-size: 26px;
             font-weight: bold;
             color: #38bdf8;
+            white-space: nowrap;
         }
+
         .header-time {
-            display: table-cell;
             text-align: right;
             font-size: 16px;
             color: #94a3b8;
+            white-space: nowrap;
         }
-        .grid-container {
-            display: table;
+
+        .btn-refresh {
+            color: #38bdf8;
+            text-decoration: none;
+            font-weight: bold;
+            margin-left: 8px;
+            background-color: #1e293b;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #334155;
+        }
+
+        /* KHUNG DASHBOARD 3 CỘT BẢNG PHẲNG */
+        .dashboard-table {
             width: 100%;
             table-layout: fixed;
+            border-collapse: separate;
+            border-spacing: 12px 0;
         }
-        .col {
-            display: table-cell;
-            width: 33.33%;
-            padding: 0 8px;
+
+        .card-td {
             vertical-align: top;
+            padding: 0;
         }
+
         .card {
             background-color: #0f172a;
             border: 2px solid #1e293b;
-            border-radius: 8px;
-            padding: 12px;
+            border-radius: 12px;
+            padding: 16px;
         }
-        .card-title {
-            font-size: 18px;
+
+        .card-header {
+            font-size: 20px;
             font-weight: bold;
             text-align: center;
-            margin-bottom: 10px;
-        }
-        .wfh-box {
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 12px;
             color: #ffffff;
+            margin-bottom: 14px;
         }
-        .wfh-lbl { font-size: 11px; font-weight: bold; text-transform: uppercase; }
-        .wfh-val { font-size: 18px; font-weight: bold; margin: 4px 0; }
-        .wfh-desc { font-size: 12px; line-height: 1.3; }
-        
-        .metric-table {
+
+        /* KHỐI KHUYẾN NGHỊ WFH */
+        .wfh-box {
+            padding: 14px;
+            border-radius: 8px;
+            margin-bottom: 14px;
+            color: #ffffff;
+            min-height: 110px;
+        }
+
+        .wfh-label {
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            opacity: 0.9;
+        }
+
+        .wfh-status {
+            font-size: 22px;
+            font-weight: bold;
+            margin: 6px 0;
+        }
+
+        .wfh-reason {
+            font-size: 13px;
+            line-height: 1.4;
+            opacity: 0.95;
+        }
+
+        /* BẢNG CHỈ SỐ CON (GRID 2x2) */
+        .metrics-table {
             width: 100%;
             border-collapse: separate;
-            border-spacing: 6px;
+            border-spacing: 8px;
         }
-        .metric-box {
+
+        .metric-cell {
             background-color: #1e293b;
+            padding: 10px 6px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #334155;
+        }
+
+        .m-title {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-bottom: 4px;
+            font-weight: bold;
+        }
+
+        .m-value {
+            font-size: 22px;
+            font-weight: bold;
+            margin: 2px 0;
+        }
+
+        .m-sub {
+            font-size: 11px;
+            color: #cbd5e1;
+            margin-top: 2px;
+        }
+
+        .alert-bar {
+            background-color: #065f46;
+            color: #ffffff;
+            text-align: center;
             padding: 8px;
             border-radius: 6px;
-            text-align: center;
+            font-size: 13px;
+            margin-bottom: 12px;
         }
-        .m-lbl { font-size: 10px; color: #94a3b8; }
-        .m-val { font-size: 20px; font-weight: bold; margin: 2px 0; }
-        .m-sub { font-size: 10px; color: #f1f5f9; }
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <div class="header-title">🚨 CẢNH BÁO NGẬP & WFH Banqup VN</div>
-        <div class="header-time">
-    🕒 {{ now_time }} | 📅 {{ now_date }}
-    <!-- Nút kích hoạt Xóa Cache trực tiếp -->
-    <a href="/clear-cache?pwd={{ admin_pwd }}" style="color: #0284c7; text-decoration: none; margin-left: 10px; font-weight: bold;">[🔄 Làm mới]</a>
-    </div>
+    <!-- HEADER TABLE -->
+    <table class="header-table" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+            <td class="header-title">
+                🚨 CẢNH BÁO NGẬP & WFH Banqup VN
+            </td>
+            <td class="header-time">
+                🕒 {{ now_time }} &nbsp;|&nbsp; 📅 {{ now_date }}
+                <a href="/clear-cache?pwd={{ admin_pwd }}" class="btn-refresh">🔄 Làm mới</a>
+            </td>
+        </tr>
+    </table>
+
     {% if msg == 'cleared' %}
-    <div style="background-color: #065f46; color: white; text-align: center; padding: 4px; font-size: 12px; margin-bottom: 8px;">
+    <div class="alert-bar">
         ✅ Đã xóa Cache và cập nhật dữ liệu mới nhất thành công!
     </div>
     {% endif %}
 
-    <div class="grid-container">
-        {% for c in cards %}
-        <div class="col">
-            <div class="card">
-                <div class="card-title">📌 {{ c.label }} ({{ c.date_str }})</div>
-                
-                <div class="wfh-box" style="background-color: {{ c.bg_color }};">
-                    <div class="wfh-lbl">KHUYẾN NGHỊ LÀM VIỆC:</div>
-                    <div class="wfh-val">{{ c.icon }} {{ c.wfh_status }}</div>
-                    <div class="wfh-desc">👉 {{ c.wfh_reason }}</div>
-                </div>
+    <!-- DASHBOARD 3 COLUMNS TABLE -->
+    <table class="dashboard-table" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+            {% for c in cards %}
+            <td class="card-td">
+                <div class="card">
+                    <div class="card-header">📌 {{ c.label }} ({{ c.date_str }})</div>
+                    
+                    <div class="wfh-box" style="background-color: {{ c.bg_color }};">
+                        <div class="wfh-label">KHUYẾN NGHỊ LÀM VIỆC:</div>
+                        <div class="wfh-status">{{ c.icon }} {{ c.wfh_status }}</div>
+                        <div class="wfh-reason">👉 {{ c.wfh_reason }}</div>
+                    </div>
 
-                <table class="metric-table">
-                    <tr>
-                        <td width="50%" class="metric-box">
-                            <div class="m-lbl">🌊 ĐỈNH TRIỀU</div>
-                            <div class="m-val" style="color: #38bdf8;">{{ c.dinh_trieu }}</div>
-                            <div class="m-sub">⏰ {{ c.gio_trieu }}</div>
-                        </td>
-                        <td width="50%" class="metric-box">
-                            <div class="m-lbl">🚨 BÁO ĐỘNG</div>
-                            <div class="m-val" style="color: #ef4444;">{{ c.bao_dong }}</div>
-                            <div class="m-sub">Trạm Phú An</div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="metric-box">
-                            <div class="m-lbl">🌅 SÁNG (7h-9h)</div>
-                            <div class="m-val" style="color: #60a5fa;">{{ c.morning_rain }} mm</div>
-                            <div class="m-sub">☔ XS {{ c.morning_prob }}%</div>
-                        </td>
-                        <td class="metric-box">
-                            <div class="m-lbl">🌇 CHIỀU (17h-19h)</div>
-                            <div class="m-val" style="color: #a78bfa;">{{ c.evening_rain }} mm</div>
-                            <div class="m-sub">☔ XS {{ c.evening_prob }}%</div>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
+                    <table class="metrics-table" border="0" cellspacing="0" cellpadding="0">
+                        <tr>
+                            <td width="50%" class="metric-cell">
+                                <div class="m-title">🌊 ĐỈNH TRIỀU</div>
+                                <div class="m-value" style="color: #38bdf8;">{{ c.dinh_trieu }}</div>
+                                <div class="m-sub">⏰ {{ c.gio_trieu }}</div>
+                            </td>
+                            <td width="50%" class="metric-cell">
+                                <div class="m-title">🚨 BÁO ĐỘNG</div>
+                                <div class="m-value" style="color: #ef4444;">{{ c.bao_dong }}</div>
+                                <div class="m-sub">Trạm Phú An</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="metric-cell">
+                                <div class="m-title">🌅 SÁNG (7h-9h)</div>
+                                <div class="m-value" style="color: #60a5fa;">{{ c.morning_rain }} mm</div>
+                                <div class="m-sub">☔ XS {{ c.morning_prob }}%</div>
+                            </td>
+                            <td class="metric-cell">
+                                <div class="m-title">🌇 CHIỀU (17h-19h)</div>
+                                <div class="m-value" style="color: #a78bfa;">{{ c.evening_rain }} mm</div>
+                                <div class="m-sub">☔ XS {{ c.evening_prob }}%</div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </td>
+            {% endfor %}
+        </tr>
+    </table>
 
 </body>
 </html>
