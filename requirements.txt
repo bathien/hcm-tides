@@ -1,4 +1,5 @@
 flask
+gunicorn
 jinja2
 requests
 google-genai
