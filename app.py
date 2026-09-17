@@ -35,7 +35,7 @@ try:
     GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
   if "ADMIN_PASSWORD" in st.secrets:
     ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
-except Exception as e:
+except Exception:
   pass
 
 if not GEMINI_API_KEY:
@@ -230,7 +230,7 @@ three_days_data = analyze_three_workdays_wfh_cached(
     pdf_bytes, dates_info_json, pdf_date_label, GEMINI_API_KEY
 )
 
-# 5. RENDER HTML TIZEN 3.5 COMPATIBLE
+# 5. RENDER HTML TIZEN 3.5 COMPATIBLE WITH SOLID HEX COLORS
 cards_html = ""
 for idx in range(3):
   item = (
@@ -241,16 +241,17 @@ for idx in range(3):
   d_obj = three_workdays[idx]
   r_sum, r_prob = fetch_weather_thao_dien(d_obj.strftime("%Y-%m-%d"))
 
-  bg_color = "linear-gradient(135deg, #064e3b 0%, #065f46 100%)"
+  # DÙNG MÀU ĐƠN SẮC HEX (SOLID COLOR) DỄ HIỂN THỊ TRÊN TIZEN 3.5
+  bg_solid_color = "#065f46"  # Xanh lá mặc định
   border_color = "#10b981"
   wfh_icon = "✅"
 
   if item.get("muc_do_wfh") == "DANGER":
-    bg_color = "linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%)"
+    bg_solid_color = "#991b1b"  # Đỏ
     border_color = "#ef4444"
     wfh_icon = "🚨"
   elif item.get("muc_do_wfh") == "WARNING":
-    bg_color = "linear-gradient(135deg, #713f12 0%, #854d0e 100%)"
+    bg_solid_color = "#854d0e"  # Vàng đất/Cam
     border_color = "#eab308"
     wfh_icon = "⚠️"
 
@@ -260,7 +261,8 @@ for idx in range(3):
             <h2 style="color: #f8fafc; margin: 0 0 8px 0; text-align: center; font-size: 18px;">
                 📌 {item.get('label', '')} ({d_obj.strftime('%d/%m')})
             </h2>
-            <div style="background: {bg_color}; border: 2px solid {border_color}; border-radius: 8px; padding: 10px; color: #ffffff; margin-bottom: 10px;">
+            <!-- DÙNG SOLID BACKGROUND-COLOR HOÀN TOÀN TƯƠNG THÍCH TIZEN TV -->
+            <div style="background-color: {bg_solid_color}; border: 2px solid {border_color}; border-radius: 8px; padding: 10px; color: #ffffff; margin-bottom: 10px;">
                 <div style="font-size: 11px; text-transform: uppercase; font-weight: bold;">KHUYẾN NGHỊ LÀM VIỆC:</div>
                 <div style="font-size: 18px; font-weight: 900; margin: 2px 0;">{wfh_icon} {item.get('khuyen_nghi_wfh', 'N/A')}</div>
                 <div style="font-size: 11px; line-height: 1.2;">👉 {item.get('ly_do_wfh', 'N/A')}</div>
