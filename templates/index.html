@@ -3,15 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Tự động refresh mỗi 5 phút (300 giây) -->
     <meta http-equiv="refresh" content="300">
     <title>CẢNH BÁO NGẬP & WFH Banqup VN</title>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body {
             background-color: #030712;
             color: #f8fafc;
@@ -21,149 +17,31 @@
             padding: 16px;
             overflow: hidden;
         }
-
-        /* HEADER DÙNG BẢNG HTML CỔ ĐIỂN - CHỐNG BỎNG RỚT DÒNG */
-        .header-table {
-            width: 100%;
-            border-bottom: 2px solid #334155;
-            padding-bottom: 12px;
-            margin-bottom: 16px;
-        }
-
-        .header-title {
-            font-size: 26px;
-            font-weight: bold;
-            color: #38bdf8;
-            white-space: nowrap;
-        }
-
-        .header-time {
-            text-align: right;
-            font-size: 16px;
-            color: #94a3b8;
-            white-space: nowrap;
-        }
-
-        .btn-refresh {
-            color: #38bdf8;
-            text-decoration: none;
-            font-weight: bold;
-            margin-left: 8px;
-            background-color: #1e293b;
-            padding: 4px 8px;
-            border-radius: 4px;
-            border: 1px solid #334155;
-        }
-
-        /* KHUNG DASHBOARD 3 CỘT BẢNG PHẲNG */
-        .dashboard-table {
-            width: 100%;
-            table-layout: fixed;
-            border-collapse: separate;
-            border-spacing: 12px 0;
-        }
-
-        .card-td {
-            vertical-align: top;
-            padding: 0;
-        }
-
-        .card {
-            background-color: #0f172a;
-            border: 2px solid #1e293b;
-            border-radius: 12px;
-            padding: 16px;
-        }
-
-        .card-header {
-            font-size: 20px;
-            font-weight: bold;
-            text-align: center;
-            color: #ffffff;
-            margin-bottom: 14px;
-        }
-
-        /* KHỐI KHUYẾN NGHỊ WFH */
-        .wfh-box {
-            padding: 14px;
-            border-radius: 8px;
-            margin-bottom: 14px;
-            color: #ffffff;
-            min-height: 110px;
-        }
-
-        .wfh-label {
-            font-size: 11px;
-            font-weight: bold;
-            text-transform: uppercase;
-            opacity: 0.9;
-        }
-
-        .wfh-status {
-            font-size: 22px;
-            font-weight: bold;
-            margin: 6px 0;
-        }
-
-        .wfh-reason {
-            font-size: 13px;
-            line-height: 1.4;
-            opacity: 0.95;
-        }
-
-        /* BẢNG CHỈ SỐ CON (GRID 2x2) */
-        .metrics-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 8px;
-        }
-
-        .metric-cell {
-            background-color: #1e293b;
-            padding: 10px 6px;
-            border-radius: 8px;
-            text-align: center;
-            border: 1px solid #334155;
-        }
-
-        .m-title {
-            font-size: 11px;
-            color: #94a3b8;
-            margin-bottom: 4px;
-            font-weight: bold;
-        }
-
-        .m-value {
-            font-size: 22px;
-            font-weight: bold;
-            margin: 2px 0;
-        }
-
-        .m-sub {
-            font-size: 11px;
-            color: #cbd5e1;
-            margin-top: 2px;
-        }
-
-        .alert-bar {
-            background-color: #065f46;
-            color: #ffffff;
-            text-align: center;
-            padding: 8px;
-            border-radius: 6px;
-            font-size: 13px;
-            margin-bottom: 12px;
-        }
+        .header-table { width: 100%; border-bottom: 2px solid #334155; padding-bottom: 12px; margin-bottom: 16px; }
+        .header-title { font-size: 26px; font-weight: bold; color: #38bdf8; white-space: nowrap; }
+        .header-time { text-align: right; font-size: 16px; color: #94a3b8; white-space: nowrap; }
+        .btn-refresh { color: #38bdf8; text-decoration: none; font-weight: bold; margin-left: 8px; background-color: #1e293b; padding: 4px 8px; border-radius: 4px; border: 1px solid #334155; }
+        .dashboard-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 12px 0; }
+        .card-td { vertical-align: top; padding: 0; }
+        .card { background-color: #0f172a; border: 2px solid #1e293b; border-radius: 12px; padding: 16px; }
+        .card-header { font-size: 20px; font-weight: bold; text-align: center; color: #ffffff; margin-bottom: 14px; }
+        .wfh-box { padding: 14px; border-radius: 8px; margin-bottom: 14px; color: #ffffff; min-height: 110px; }
+        .wfh-label { font-size: 11px; font-weight: bold; text-transform: uppercase; opacity: 0.9; }
+        .wfh-status { font-size: 22px; font-weight: bold; margin: 6px 0; }
+        .wfh-reason { font-size: 13px; line-height: 1.4; opacity: 0.95; }
+        .metrics-table { width: 100%; border-collapse: separate; border-spacing: 8px; }
+        .metric-cell { background-color: #1e293b; padding: 10px 6px; border-radius: 8px; text-align: center; border: 1px solid #334155; }
+        .m-title { font-size: 11px; color: #94a3b8; margin-bottom: 4px; font-weight: bold; }
+        .m-value { font-size: 22px; font-weight: bold; margin: 2px 0; }
+        .m-sub { font-size: 11px; color: #cbd5e1; margin-top: 2px; }
+        .alert-bar { background-color: #065f46; color: #ffffff; text-align: center; padding: 8px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
     </style>
 </head>
 <body>
 
-    <!-- HEADER TABLE -->
     <table class="header-table" border="0" cellspacing="0" cellpadding="0">
         <tr>
-            <td class="header-title">
-                🚨 CẢNH BÁO NGẬP & WFH Banqup VN
-            </td>
+            <td class="header-title">🚨 CẢNH BÁO NGẬP & WFH Banqup VN</td>
             <td class="header-time">
                 🕒 {{ now_time }} &nbsp;|&nbsp; 📅 {{ now_date }}
                 <a href="/clear-cache?pwd={{ admin_pwd }}" class="btn-refresh">🔄 Làm mới</a>
@@ -177,7 +55,6 @@
     </div>
     {% endif %}
 
-    <!-- DASHBOARD 3 COLUMNS TABLE -->
     <table class="dashboard-table" border="0" cellspacing="0" cellpadding="0">
         <tr>
             {% for c in cards %}
@@ -222,6 +99,30 @@
             {% endfor %}
         </tr>
     </table>
+
+    <!-- SCRIPT TỰ ĐỘNG LÀM MỚI TRANG ĐÚNG 11:00 AM MỖI NGÀY -->
+    <script>
+        function schedule11AMReload() {
+            var now = new Date();
+            var target = new Date();
+            
+            target.setHours(11, 0, 0, 0); // Đặt mốc 11:00:00 AM
+            
+            // Nếu thời gian hiện tại đã qua 11 AM, hẹn mốc 11 AM ngày tiếp theo
+            if (now.getTime() >= target.getTime()) {
+                target.setDate(target.getDate() + 1);
+            }
+            
+            var timeUntil11AM = target.getTime() - now.getTime();
+            
+            setTimeout(function() {
+                // Tự động chuyển hướng tới đường dẫn làm mới cache
+                window.location.href = "/clear-cache?pwd={{ admin_pwd }}";
+            }, timeUntil11AM);
+        }
+
+        schedule11AMReload();
+    </script>
 
 </body>
 </html>

@@ -23,10 +23,17 @@ HEADERS = {
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
-# KHỞI TẠO BỘ NHỚ CACHE THỜI GIAN
-weather_cache = TTLCache(maxsize=100, ttl=3600)
-pdf_cache = TTLCache(maxsize=10, ttl=7200)
-ai_cache = TTLCache(maxsize=10, ttl=14400)
+# Cache tối đa 100 phần tử, TTL 24 giờ
+weather_cache = TTLCache(maxsize=100, ttl=86400)
+pdf_cache = TTLCache(maxsize=10, ttl=86400)
+ai_cache = TTLCache(maxsize=10, ttl=86400)
+
+
+def get_data_version(now_vn):
+  """Sinh phiên bản dữ liệu: Tự động đổi version đúng lúc 11:00 AM hàng ngày."""
+  today_str = now_vn.strftime("%Y-%m-%d")
+  version = "v1_morning" if now_vn.hour < 11 else "v2_post11am"
+  return f"{today_str}_{version}"
 
 
 def get_three_workdays(from_date):
@@ -39,8 +46,9 @@ def get_three_workdays(from_date):
   return workdays
 
 
+# THÊM `data_ver` VÀO HÀM ĐỂ CACHE BẮT BUỘC ĐỔI KHI SANG NGÀY MỚI HOẶC SANG MỐC 11H
 @cached(weather_cache)
-def fetch_hourly_weather_thao_dien(target_date_str):
+def fetch_hourly_weather_thao_dien(target_date_str, data_ver):
   url = f"https://api.open-meteo.com/v1/forecast?latitude=10.8031&longitude=106.7324&hourly=precipitation,precipitation_probability&timezone=Asia%2FBangkok&start_date={target_date_str}&end_date={target_date_str}"
   try:
     res = requests.get(url, timeout=3)
@@ -73,7 +81,7 @@ def fetch_hourly_weather_thao_dien(target_date_str):
 
 
 @cached(pdf_cache)
-def fetch_latest_pdf(today_date_str):
+def fetch_latest_pdf(today_date_str, data_ver):
   today_date = datetime.datetime.strptime(today_date_str, "%Y-%m-%d").date()
   for i in range(5):
     check_date = today_date - datetime.timedelta(days=i)
@@ -88,7 +96,7 @@ def fetch_latest_pdf(today_date_str):
 
 
 @cached(ai_cache)
-def analyze_three_workdays(pdf_date_str, dates_info_json, pdf_bytes):
+def analyze_three_workdays(pdf_date_str, dates_info_json, pdf_bytes, data_ver):
   fallback = [
       {
           "ngay": "N/A",
@@ -165,19 +173,26 @@ def clear_cache():
 def index():
   msg = request.args.get("msg")
   now_vn = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+
+  # Tạo version duy nhất dựa vào [NGÀY + MỐC THỜI GIAN 11H]
+  data_ver = get_data_version(now_vn)
+
   today_date = now_vn.date()
   three_workdays = get_three_workdays(today_date)
 
   weather_list = [
-      fetch_hourly_weather_thao_dien(d.strftime("%Y-%m-%d"))
+      fetch_hourly_weather_thao_dien(d.strftime("%Y-%m-%d"), data_ver)
       for d in three_workdays
   ]
-  pdf_date_str, pdf_bytes = fetch_latest_pdf(today_date.strftime("%Y-%m-%d"))
+  pdf_date_str, pdf_bytes = fetch_latest_pdf(
+      today_date.strftime("%Y-%m-%d"), data_ver
+  )
 
   ai_data = analyze_three_workdays(
       pdf_date_str or today_date.strftime("%d/%m/%Y"),
       json.dumps(weather_list),
       pdf_bytes,
+      data_ver,
   )
 
   cards = []
@@ -227,5 +242,4 @@ def index():
 
 
 if __name__ == "__main__":
-  # Chạy ứng dụng trên cổng 5000 chuẩn Flask
   app.run(host="0.0.0.0", port=5000, debug=True)
