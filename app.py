@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# TRIỆT TIỆU TOÀN BỘ PADDING/MARGIN CỦA STREAMLIT
+# RESET CSS ÉP DÙNG BLOCK DIV PURE FLEX NATIVE
 st.markdown(
     """
     <style>
@@ -35,8 +35,36 @@ st.markdown(
             padding: 0 !important;
         }
         header, footer, #MainMenu { visibility: hidden !important; display: none !important; }
-        .block-container { padding: 4px 6px !important; margin: 0 !important; max-width: 100% !important; }
-        div.stButton > button {
+        .block-container { padding: 6px !important; margin: 0 !important; max-width: 100% !important; }
+
+        /* KHUNG CHÍNH CHIA 3 CỘT BẰNG BLOCK DIV */
+        .tv-grid {
+            width: 100%;
+            white-space: nowrap;
+        }
+        .tv-col {
+            display: inline-block;
+            width: 32.8%;
+            vertical-align: top;
+            white-space: normal;
+            box-sizing: border-box;
+            padding: 2px;
+        }
+        .tv-card {
+            background-color: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 6px;
+            padding: 6px;
+        }
+        .tv-box {
+            background-color: #1e293b;
+            padding: 5px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            text-align: center;
+        }
+
+        button {
             width: 100%; background-color: #0284c7 !important; color: #ffffff !important;
             border-radius: 4px !important; border: none !important; font-size: 11px !important;
         }
@@ -215,7 +243,7 @@ three_days_data = analyze_three_workdays_wfh_cached(
     pdf_bytes, dates_info_json, pdf_date_label, GEMINI_API_KEY
 )
 
-# RENDER BẢNG HTML PHẲNG HOÀN TOÀN TƯƠNG THÍCH 100% TIZEN 3.5 (NO NESTED TABLES)
+# DỰNG CỘT BẰNG HOÀN TOÀN THẺ DIV (CHỐNG LỖI FILTER TABLE CỦA STREAMLIT)
 cols_html = ""
 for idx in range(3):
   item = (
@@ -236,48 +264,59 @@ for idx in range(3):
     wfh_icon = "⚠️"
 
   cols_html += f"""
-    <td width="33%" valign="top" style="padding: 3px;">
-        <div style="background-color: #0f172a; border: 1px solid #1e293b; padding: 6px;">
-            <p style="color: #f8fafc; font-weight: bold; font-size: 13px; text-align: center; margin: 0 0 4px 0;">
+    <div class="tv-col">
+        <div class="tv-card">
+            <div style="color: #f8fafc; font-weight: bold; font-size: 13px; text-align: center; margin-bottom: 5px;">
                 📌 {item.get('label', '')} ({d_obj.strftime('%d/%m')})
-            </p>
+            </div>
             
-            <div style="background-color: {card_bg_color}; padding: 6px; color: #ffffff; margin-bottom: 6px;">
-                <p style="font-size: 9px; font-weight: bold; margin: 0; text-transform: uppercase;">KHUYẾN NGHỊ LÀM VIỆC:</p>
-                <p style="font-size: 13px; font-weight: bold; margin: 2px 0;">{wfh_icon} {item.get('khuyen_nghi_wfh', 'N/A')}</p>
-                <p style="font-size: 9px; margin: 0; line-height: 1.1;">👉 {item.get('ly_do_wfh', 'N/A')}</p>
+            <div style="background-color: {card_bg_color}; padding: 6px; border-radius: 4px; color: #ffffff; margin-bottom: 6px;">
+                <div style="font-size: 9px; font-weight: bold; text-transform: uppercase;">KHUYẾN NGHỊ LÀM VIỆC:</div>
+                <div style="font-size: 13px; font-weight: bold; margin: 2px 0;">{wfh_icon} {item.get('khuyen_nghi_wfh', 'N/A')}</div>
+                <div style="font-size: 9px; line-height: 1.2;">👉 {item.get('ly_do_wfh', 'N/A')}</div>
             </div>
 
-            <!-- DÙNG PHẲNG KHÔNG LỒNG TABLE -->
-            <p style="background-color: #1e293b; padding: 4px; margin: 0 0 3px 0; font-size: 10px; color: #94a3b8; text-align: center;">
-                🌊 TRIỀU: <b style="color: #38bdf8; font-size: 12px;">{item.get('dinh_trieu', 'N/A')}</b> (⏰ {item.get('gio_dinh_trieu', 'N/A')}) | <b style="color: #ef4444;">{item.get('bao_dong', 'N/A')}</b>
-            </p>
-            <p style="background-color: #1e293b; padding: 4px; margin: 0 0 3px 0; font-size: 10px; color: #94a3b8; text-align: center;">
-                🌅 SÁNG (7h-9h): <b style="color: #60a5fa; font-size: 12px;">{w_data['morning_rain']} mm</b> (☔ {w_data['morning_prob']}%)
-            </p>
-            <p style="background-color: #1e293b; padding: 4px; margin: 0; font-size: 10px; color: #94a3b8; text-align: center;">
-                🌇 CHIỀU (17h-19h): <b style="color: #a78bfa; font-size: 12px;">{w_data['evening_rain']} mm</b> (☔ {w_data['evening_prob']}%)
-            </p>
+            <div class="tv-box">
+                <span style="font-size: 10px; color: #94a3b8;">🌊 TRIỀU: </span>
+                <b style="color: #38bdf8; font-size: 12px;">{item.get('dinh_trieu', 'N/A')}</b> 
+                <span style="font-size: 10px; color: #f1f5f9;">(⏰ {item.get('gio_dinh_trieu', 'N/A')})</span> | 
+                <b style="color: #ef4444; font-size: 11px;">{item.get('bao_dong', 'N/A')}</b>
+            </div>
+
+            <div class="tv-box">
+                <span style="font-size: 10px; color: #94a3b8;">🌅 SÁNG (7h-9h): </span>
+                <b style="color: #60a5fa; font-size: 12px;">{w_data['morning_rain']} mm</b> 
+                <span style="font-size: 10px; color: #f1f5f9;">(☔ {w_data['morning_prob']}%)</span>
+            </div>
+
+            <div class="tv-box">
+                <span style="font-size: 10px; color: #94a3b8;">🌇 CHIỀU (17h-19h): </span>
+                <b style="color: #a78bfa; font-size: 12px;">{w_data['evening_rain']} mm</b> 
+                <span style="font-size: 10px; color: #f1f5f9;">(☔ {w_data['evening_prob']}%)</span>
+            </div>
         </div>
-    </td>
+    </div>
     """
 
 full_dashboard_html = f"""
 <div style="background-color: #030712; padding: 2px;">
-    <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: bold; color: #38bdf8;">
-        🚨 CẢNH BÁO NGẬP & WFH Banqup VN 
-        <span style="font-size: 10px; color: #94a3b8; float: right;">🕒 {now_vn.strftime('%H:%M:%S')} | 📅 {now_vn.strftime('%d/%m/%Y')}</span>
-    </p>
+    <div style="margin-bottom: 6px; overflow: hidden;">
+        <span style="font-size: 15px; font-weight: bold; color: #38bdf8; float: left;">
+            🚨 CẢNH BÁO NGẬP & WFH Banqup VN
+        </span>
+        <span style="font-size: 11px; color: #94a3b8; float: right;">
+            🕒 {now_vn.strftime('%H:%M:%S')} | 📅 {now_vn.strftime('%d/%m/%Y')}
+        </span>
+    </div>
+    <div style="clear: both;"></div>
 
-    <table width="100%" border="0" cellspacing="0" cellpadding="0">
-        <tr>
-            {cols_html}
-        </tr>
-    </table>
+    <div class="tv-grid">
+        {cols_html}
+    </div>
 </div>
 """
 
-# OUTPUT SINGLE RAW HTML DIRECTLY TO STREAMLIT
+# HOÀN TOÀN BỎ STREAMLIT TABLE - RENDER DIV BLOCK NATIVE
 st.markdown(full_dashboard_html, unsafe_allow_html=True)
 
 if st.button("🔄 Làm mới dữ liệu ngay"):
