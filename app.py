@@ -46,7 +46,6 @@ def get_three_workdays(from_date):
   return workdays
 
 
-# THÊM `data_ver` VÀO HÀM ĐỂ CACHE BẮT BUỘC ĐỔI KHI SANG NGÀY MỚI HOẶC SANG MỐC 11H
 @cached(weather_cache)
 def fetch_hourly_weather_thao_dien(target_date_str, data_ver):
   url = f"https://api.open-meteo.com/v1/forecast?latitude=10.8031&longitude=106.7324&hourly=precipitation,precipitation_probability&timezone=Asia%2FBangkok&start_date={target_date_str}&end_date={target_date_str}"
@@ -110,7 +109,7 @@ def analyze_three_workdays(pdf_date_str, dates_info_json, pdf_bytes, data_ver):
       },
       {
           "ngay": "N/A",
-          "label": "NEXT WORKDAY 1",
+          "label": "NGÀY LÀM VIỆC TIẾP THEO 1",
           "dinh_trieu": "1.55m",
           "gio_dinh_trieu": "18h00",
           "bao_dong": "BD1",
@@ -120,7 +119,7 @@ def analyze_three_workdays(pdf_date_str, dates_info_json, pdf_bytes, data_ver):
       },
       {
           "ngay": "N/A",
-          "label": "NEXT WORKDAY 2",
+          "label": "NGÀY LÀM VIỆC TIẾP THEO 2",
           "dinh_trieu": "1.55m",
           "gio_dinh_trieu": "19h00",
           "bao_dong": "BD1",
@@ -139,8 +138,8 @@ def analyze_three_workdays(pdf_date_str, dates_info_json, pdf_bytes, data_ver):
         Trả về ĐÚNG MẢNG JSON 3 PHẦN TỬ (không ký tự xuống dòng trong chuỗi):
         [
             {{"ngay": "DD/MM/YYYY", "label": "HÔM NAY", "dinh_trieu": "1.68m", "gio_dinh_trieu": "17h30", "bao_dong": "BD3", "khuyen_nghi_wfh": "NÊN LÀM VIỆC TẠI NHÀ (WFH)", "muc_do_wfh": "DANGER", "ly_do_wfh": "Triều BD3 kết hợp mưa chiều >30mm gây ngập sâu Nguyễn Văn Hưởng."}},
-            {{"ngay": "DD/MM/YYYY", "label": "NEXT WORKDAY 1", "dinh_trieu": "1.62m", "gio_dinh_trieu": "18h10", "bao_dong": "BD3", "khuyen_nghi_wfh": "CÂN NHẮC WFH", "muc_do_wfh": "WARNING", "ly_do_wfh": "Triều BD3 lúc 18h10 nguy cơ ngập nhẹ Quốc Hương."}},
-            {{"ngay": "DD/MM/YYYY", "label": "NEXT WORKDAY 2", "dinh_trieu": "1.52m", "gio_dinh_trieu": "19h00", "bao_dong": "BD2", "khuyen_nghi_wfh": "ĐẾN VĂN PHÒNG", "muc_do_wfh": "SAFE", "ly_do_wfh": "Thời tiết thuận lợi cả 2 ca đi lại."}}
+            {{"ngay": "DD/MM/YYYY", "label": "NGÀY LÀM VIỆC TIẾP THEO 1", "dinh_trieu": "1.62m", "gio_dinh_trieu": "18h10", "bao_dong": "BD3", "khuyen_nghi_wfh": "CÂN NHẮC WFH", "muc_do_wfh": "WARNING", "ly_do_wfh": "Triều BD3 lúc 18h10 nguy cơ ngập nhẹ Quốc Hương."}},
+            {{"ngay": "DD/MM/YYYY", "label": "NGÀY LÀM VIỆC TIẾP THEO 2", "dinh_trieu": "1.52m", "gio_dinh_trieu": "19h00", "bao_dong": "BD2", "khuyen_nghi_wfh": "ĐẾN VĂN PHÒNG", "muc_do_wfh": "SAFE", "ly_do_wfh": "Thời tiết thuận lợi cả 2 ca đi lại."}}
         ]
         """
     response = client.models.generate_content(
@@ -174,7 +173,6 @@ def index():
   msg = request.args.get("msg")
   now_vn = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
 
-  # Tạo version duy nhất dựa vào [NGÀY + MỐC THỜI GIAN 11H]
   data_ver = get_data_version(now_vn)
 
   today_date = now_vn.date()
@@ -216,7 +214,7 @@ def index():
       icon = "⚠️"
 
     cards.append({
-        "label": item.get("label", "WORKDAY"),
+        "label": item.get("label", "NGÀY LÀM VIỆC"),
         "date_str": d_obj.strftime("%d/%m"),
         "wfh_status": item.get("khuyen_nghi_wfh", "ĐẾN VĂN PHÒNG"),
         "wfh_reason": item.get("ly_do_wfh", "Thời tiết ổn định"),
