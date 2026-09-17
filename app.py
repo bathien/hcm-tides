@@ -42,26 +42,26 @@ if not GEMINI_API_KEY:
   st.error("⚠️ LỖI CẤU HÌNH: Chưa cài đặt GEMINI_API_KEY trong Secrets.")
   st.stop()
 
-# 3. GLOBAL TIZEN 3.5 OVERRIDE CSS - ÉP ĐEN TOÀN BỘ NỀN & KHÔNG SCROLLBAR
+# 3. GLOBAL CSS OVERRIDE - TRIỆT TIỆU TOÀN BỘ PADDING CỦA STREAMLIT
 st.markdown(
     """
     <style>
-        /* Ép nền đen hoàn toàn cho tất cả thẻ của Streamlit */
         html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
             background-color: #030712 !important;
             color: #f8fafc !important;
             font-family: Arial, sans-serif !important;
-            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
-        
         header, footer, #MainMenu { visibility: hidden !important; display: none !important; }
-        .block-container { padding: 0px !important; margin: 0px !important; max-width: 100% !important; }
-
-        button {
+        .block-container { padding: 4px 8px !important; margin: 0 !important; max-width: 100% !important; }
+        div.stButton > button {
+            width: 100%;
             background-color: #0284c7 !important;
             color: #ffffff !important;
             border-radius: 4px !important;
             border: none !important;
+            font-size: 11px !important;
         }
     </style>
 """,
@@ -283,7 +283,7 @@ three_days_data = analyze_three_workdays_wfh_cached(
     pdf_bytes, dates_info_json, pdf_date_label, GEMINI_API_KEY
 )
 
-# 6. HTML DẠNG SIÊU THU GỌN - TỰ ĐỘNG CHỐNG TRÀN CHO ZOOM TV 200%
+# 6. DỰNG NGUYÊN KHỐI HTML TÍNH TỐI ƯU SIÊU NHỎ CHO TIZEN 3.5
 table_cells_html = ""
 for idx in range(3):
   item = (
@@ -346,14 +346,14 @@ for idx in range(3):
     </td>
     """
 
-full_tizen_html = f"""
-<div style="background-color: #030712; padding: 4px;">
+full_dashboard_html = f"""
+<div style="background-color: #030712; padding: 4px; margin: 0;">
     <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 4px;">
         <tr>
-            <td style="font-size: 16px; font-weight: bold; color: #38bdf8;">
+            <td style="font-size: 15px; font-weight: bold; color: #38bdf8;">
                 🚨 CẢNH BÁO NGẬP & WFH Banqup VN
             </td>
-            <td align="right" style="font-size: 11px; color: #94a3b8;">
+            <td align="right" style="font-size: 10px; color: #94a3b8;">
                 🕒 {now_vn.strftime('%H:%M:%S')} | 📅 {now_vn.strftime('%d/%m/%Y')}
             </td>
         </tr>
@@ -367,9 +367,9 @@ full_tizen_html = f"""
 </div>
 """
 
-# OUTPUT SINGLE RAW HTML TO STREAMLIT
-st.html(full_tizen_html)
+# ĐƯA TOÀN BỘ DASHBOARD VÀO RENDER QUA ST.MARKDOWN TRỰC TIẾP
+st.markdown(full_dashboard_html, unsafe_allow_html=True)
 
-# ADMIN CLEAR CACHE BUTTON
-if st.button("🔄 Làm mới ngay"):
+# ADMIN ACTION BUTTON
+if st.button("🔄 Làm mới dữ liệu ngay"):
   request_clear_cache_dialog()
