@@ -42,24 +42,21 @@ if not GEMINI_API_KEY:
   st.error("⚠️ LỖI CẤU HÌNH: Chưa cài đặt GEMINI_API_KEY trong Secrets.")
   st.stop()
 
-# 3. GLOBAL TIZEN 3.5 COMPATIBLE CSS (CHROMIUM 47 SAFE)
+# 3. GLOBAL TIZEN 3.5 OVERRIDE CSS - ÉP ĐEN TOÀN BỘ NỀN & KHÔNG SCROLLBAR
 st.markdown(
     """
     <style>
-        /* Force dark theme without modern CSS variables */
-        body, .stApp {
+        /* Ép nền đen hoàn toàn cho tất cả thẻ của Streamlit */
+        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
             background-color: #030712 !important;
             color: #f8fafc !important;
             font-family: Arial, sans-serif !important;
-        }
-        header, footer, #MainMenu { visibility: hidden !important; display: none !important; }
-        .block-container { padding: 8px !important; }
-
-        /* Override Streamlit Column breaks on Chromium 47 */
-        div[data-testid="stBlock"] {
-            width: 100% !important;
+            overflow: hidden !important;
         }
         
+        header, footer, #MainMenu { visibility: hidden !important; display: none !important; }
+        .block-container { padding: 0px !important; margin: 0px !important; max-width: 100% !important; }
+
         button {
             background-color: #0284c7 !important;
             color: #ffffff !important;
@@ -286,7 +283,7 @@ three_days_data = analyze_three_workdays_wfh_cached(
     pdf_bytes, dates_info_json, pdf_date_label, GEMINI_API_KEY
 )
 
-# 6. PURE HTML TABLE RENDERING FOR TIZEN 3.5 (NO FLEXBOX / NO STREAMLIT GRID)
+# 6. HTML DẠNG SIÊU THU GỌN - TỰ ĐỘNG CHỐNG TRÀN CHO ZOOM TV 200%
 table_cells_html = ""
 for idx in range(3):
   item = (
@@ -297,52 +294,51 @@ for idx in range(3):
   d_obj = three_workdays[idx]
   w_data = fetch_hourly_weather_thao_dien(d_obj.strftime("%Y-%m-%d"))
 
-  card_bg_color = "#065f46"  # Xanh
+  card_bg_color = "#065f46"
   wfh_icon = "✅"
   if item.get("muc_do_wfh") == "DANGER":
-    card_bg_color = "#991b1b"  # Đỏ
+    card_bg_color = "#991b1b"
     wfh_icon = "🚨"
   elif item.get("muc_do_wfh") == "WARNING":
-    card_bg_color = "#854d0e"  # Vàng
+    card_bg_color = "#854d0e"
     wfh_icon = "⚠️"
 
   table_cells_html += f"""
-    <td width="33%" valign="top" style="padding: 4px;">
-        <div style="background-color: #0f172a; border: 2px solid #1e293b; border-radius: 8px; padding: 10px;">
-            <div style="color: #f8fafc; font-weight: bold; font-size: 16px; text-align: center; margin-bottom: 8px;">
+    <td width="33%" valign="top" style="padding: 2px;">
+        <div style="background-color: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 6px;">
+            <div style="color: #f8fafc; font-weight: bold; font-size: 13px; text-align: center; margin-bottom: 4px;">
                 📌 {item.get('label', '')} ({d_obj.strftime('%d/%m')})
             </div>
             
-            <div style="background-color: {card_bg_color}; border-radius: 6px; padding: 8px; color: #ffffff; margin-bottom: 8px;">
-                <div style="font-size: 11px; font-weight: bold; text-transform: uppercase;">KHUYẾN NGHỊ LÀM VIỆC:</div>
-                <div style="font-size: 16px; font-weight: bold; margin: 3px 0;">{wfh_icon} {item.get('khuyen_nghi_wfh', 'N/A')}</div>
-                <div style="font-size: 11px; line-height: 1.2;">👉 {item.get('ly_do_wfh', 'N/A')}</div>
+            <div style="background-color: {card_bg_color}; border-radius: 4px; padding: 6px; color: #ffffff; margin-bottom: 6px;">
+                <div style="font-size: 9px; font-weight: bold; text-transform: uppercase;">KHUYẾN NGHỊ LÀM VIỆC:</div>
+                <div style="font-size: 13px; font-weight: bold; margin: 2px 0;">{wfh_icon} {item.get('khuyen_nghi_wfh', 'N/A')}</div>
+                <div style="font-size: 9px; line-height: 1.1;">👉 {item.get('ly_do_wfh', 'N/A')}</div>
             </div>
 
-            <!-- TABLE CON ĐỂ TẠO GRID CHỈ SỐ HOÀN TOÀN CỔ ĐIỂN CHỦYÊN DỤNG TIZEN 3.5 -->
-            <table width="100%" border="0" cellspacing="4" cellpadding="0">
+            <table width="100%" border="0" cellspacing="2" cellpadding="0">
                 <tr>
-                    <td width="50%" align="center" style="background-color: #1e293b; padding: 6px; border-radius: 4px;">
-                        <div style="font-size: 10px; color: #94a3b8;">🌊 ĐỈNH TRIỀU</div>
-                        <div style="font-size: 16px; font-weight: bold; color: #38bdf8;">{item.get('dinh_trieu', 'N/A')}</div>
-                        <div style="font-size: 10px; color: #f1f5f9;">⏰ {item.get('gio_dinh_trieu', 'N/A')}</div>
+                    <td width="50%" align="center" style="background-color: #1e293b; padding: 4px; border-radius: 3px;">
+                        <div style="font-size: 8px; color: #94a3b8;">🌊 ĐỈNH TRIỀU</div>
+                        <div style="font-size: 12px; font-weight: bold; color: #38bdf8;">{item.get('dinh_trieu', 'N/A')}</div>
+                        <div style="font-size: 8px; color: #f1f5f9;">⏰ {item.get('gio_dinh_trieu', 'N/A')}</div>
                     </td>
-                    <td width="50%" align="center" style="background-color: #1e293b; padding: 6px; border-radius: 4px;">
-                        <div style="font-size: 10px; color: #94a3b8;">🚨 BÁO ĐỘNG</div>
-                        <div style="font-size: 16px; font-weight: bold; color: #ef4444;">{item.get('bao_dong', 'N/A')}</div>
-                        <div style="font-size: 10px; color: #f1f5f9;">Trạm Phú An</div>
+                    <td width="50%" align="center" style="background-color: #1e293b; padding: 4px; border-radius: 3px;">
+                        <div style="font-size: 8px; color: #94a3b8;">🚨 BÁO ĐỘNG</div>
+                        <div style="font-size: 12px; font-weight: bold; color: #ef4444;">{item.get('bao_dong', 'N/A')}</div>
+                        <div style="font-size: 8px; color: #f1f5f9;">Trạm Phú An</div>
                     </td>
                 </tr>
                 <tr>
-                    <td width="50%" align="center" style="background-color: #1e293b; padding: 6px; border-radius: 4px;">
-                        <div style="font-size: 10px; color: #94a3b8;">🌅 CA SÁNG (7h-9h)</div>
-                        <div style="font-size: 16px; font-weight: bold; color: #60a5fa;">{w_data['morning_rain']} mm</div>
-                        <div style="font-size: 10px; color: #f1f5f9;">☔ XS {w_data['morning_prob']}%</div>
+                    <td width="50%" align="center" style="background-color: #1e293b; padding: 4px; border-radius: 3px;">
+                        <div style="font-size: 8px; color: #94a3b8;">🌅 SÁNG (7h-9h)</div>
+                        <div style="font-size: 12px; font-weight: bold; color: #60a5fa;">{w_data['morning_rain']} mm</div>
+                        <div style="font-size: 8px; color: #f1f5f9;">☔ {w_data['morning_prob']}%</div>
                     </td>
-                    <td width="50%" align="center" style="background-color: #1e293b; padding: 6px; border-radius: 4px;">
-                        <div style="font-size: 10px; color: #94a3b8;">🌇 CA CHIỀU (17h-19h)</div>
-                        <div style="font-size: 16px; font-weight: bold; color: #a78bfa;">{w_data['evening_rain']} mm</div>
-                        <div style="font-size: 10px; color: #f1f5f9;">☔ XS {w_data['evening_prob']}%</div>
+                    <td width="50%" align="center" style="background-color: #1e293b; padding: 4px; border-radius: 3px;">
+                        <div style="font-size: 8px; color: #94a3b8;">🌇 CHIỀU (17h-19h)</div>
+                        <div style="font-size: 12px; font-weight: bold; color: #a78bfa;">{w_data['evening_rain']} mm</div>
+                        <div style="font-size: 8px; color: #f1f5f9;">☔ {w_data['evening_prob']}%</div>
                     </td>
                 </tr>
             </table>
@@ -351,23 +347,24 @@ for idx in range(3):
     """
 
 full_tizen_html = f"""
-<table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 8px;">
-    <tr>
-        <td style="font-size: 20px; font-weight: bold; color: #38bdf8;">
-            🚨 CẢNH BÁO NGẬP & WFH Banqup VN
-        </td>
-        <td align="right" style="font-size: 13px; color: #94a3b8;">
-            🕒 {now_vn.strftime('%H:%M:%S')} | 📅 {now_vn.strftime('%d/%m/%Y')}
-        </td>
-    </tr>
-</table>
-<hr style="border: none; border-top: 1px solid #334155; margin-bottom: 10px;">
+<div style="background-color: #030712; padding: 4px;">
+    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 4px;">
+        <tr>
+            <td style="font-size: 16px; font-weight: bold; color: #38bdf8;">
+                🚨 CẢNH BÁO NGẬP & WFH Banqup VN
+            </td>
+            <td align="right" style="font-size: 11px; color: #94a3b8;">
+                🕒 {now_vn.strftime('%H:%M:%S')} | 📅 {now_vn.strftime('%d/%m/%Y')}
+            </td>
+        </tr>
+    </table>
 
-<table width="100%" border="0" cellspacing="0" cellpadding="0">
-    <tr>
-        {table_cells_html}
-    </tr>
-</table>
+    <table width="100%" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+            {table_cells_html}
+        </tr>
+    </table>
+</div>
 """
 
 # OUTPUT SINGLE RAW HTML TO STREAMLIT
