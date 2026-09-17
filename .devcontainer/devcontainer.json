@@ -1,33 +1,41 @@
 {
-  "name": "Python 3",
-  // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-  "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bookworm",
+  "name": "Flask TV Dashboard Dev",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bullseye",
+
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "username": "vscode"
+    }
+  },
+
   "customizations": {
-    "codespaces": {
-      "openFiles": [
-        "README.md",
-        "app.py"
-      ]
-    },
     "vscode": {
-      "settings": {},
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.linting.enabled": true,
+        "python.formatting.provider": "black"
+      },
       "extensions": [
         "ms-python.python",
-        "ms-python.vscode-pylance"
+        "ms-python.vscode-pylance",
+        "wholyposter.jinja-html"
       ]
     }
   },
-  "updateContentCommand": "[ -f packages.txt ] && sudo apt update && sudo apt upgrade -y && sudo xargs apt install -y <packages.txt; [ -f requirements.txt ] && pip3 install --user -r requirements.txt; pip3 install --user streamlit; echo '✅ Packages installed and Requirements met'",
-  "postAttachCommand": {
-    "server": "streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false"
-  },
+
+  // Tự động mở Public Port 5000 dành cho Smart TV truy cập
+  "forwardPorts": [5000],
   "portsAttributes": {
-    "8501": {
-      "label": "Application",
-      "onAutoForward": "openPreview"
+    "5000": {
+      "label": "Flask App",
+      "onAutoForward": "openBrowser",
+      "visibility": "public"
     }
   },
-  "forwardPorts": [
-    8501
-  ]
+
+  // Tự động cài đặt thư viện Python sau khi khởi tạo Container
+  "postCreateCommand": "pip install --upgrade pip && pip install -r requirements.txt",
+
+  "remoteUser": "vscode"
 }

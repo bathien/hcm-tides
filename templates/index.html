@@ -87,8 +87,16 @@
 
     <div class="header">
         <div class="header-title">🚨 CẢNH BÁO NGẬP & WFH Banqup VN</div>
-        <div class="header-time">🕒 {{ now_time }} | 📅 {{ now_date }}</div>
+        <div class="header-time">
+    🕒 {{ now_time }} | 📅 {{ now_date }}
+    <!-- Nút kích hoạt Xóa Cache trực tiếp -->
+    <a href="/clear-cache?pwd={{ admin_pwd }}" style="color: #0284c7; text-decoration: none; margin-left: 10px; font-weight: bold;">[🔄 Làm mới]</a>
     </div>
+    {% if msg == 'cleared' %}
+    <div style="background-color: #065f46; color: white; text-align: center; padding: 4px; font-size: 12px; margin-bottom: 8px;">
+        ✅ Đã xóa Cache và cập nhật dữ liệu mới nhất thành công!
+    </div>
+    {% endif %}
 
     <div class="grid-container">
         {% for c in cards %}

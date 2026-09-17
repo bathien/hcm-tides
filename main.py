@@ -2,9 +2,8 @@ import datetime
 import json
 import os
 import re
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from cachetools import TTLCache, cached
+from flask import Flask, redirect, render_template, request, url_for
 from google import genai
 from google.genai import types
 import requests
@@ -12,8 +11,7 @@ import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-app = FastAPI()
-templates = Jinja2Templates(directory="templates")
+app = Flask(__name__)
 
 MODEL_NAME = "gemini-3.6-flash"
 BASE_DOMAIN = "https://www.phongchonglutbaotphcm.gov.vn"
@@ -23,6 +21,12 @@ HEADERS = {
     )
 }
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+
+# KHỞI TẠO BỘ NHỚ CACHE THỜI GIAN
+weather_cache = TTLCache(maxsize=100, ttl=3600)
+pdf_cache = TTLCache(maxsize=10, ttl=7200)
+ai_cache = TTLCache(maxsize=10, ttl=14400)
 
 
 def get_three_workdays(from_date):
@@ -35,6 +39,7 @@ def get_three_workdays(from_date):
   return workdays
 
 
+@cached(weather_cache)
 def fetch_hourly_weather_thao_dien(target_date_str):
   url = f"https://api.open-meteo.com/v1/forecast?latitude=10.8031&longitude=106.7324&hourly=precipitation,precipitation_probability&timezone=Asia%2FBangkok&start_date={target_date_str}&end_date={target_date_str}"
   try:
@@ -67,20 +72,23 @@ def fetch_hourly_weather_thao_dien(target_date_str):
   }
 
 
-def fetch_latest_pdf(today_date):
+@cached(pdf_cache)
+def fetch_latest_pdf(today_date_str):
+  today_date = datetime.datetime.strptime(today_date_str, "%Y-%m-%d").date()
   for i in range(5):
     check_date = today_date - datetime.timedelta(days=i)
     pdf_url = f"{BASE_DOMAIN}/phocadownload/{check_date.strftime('%Y')}/{check_date.strftime('%m-%Y')}/HCMC_TVHN_{check_date.strftime('%Y%m%d')}.pdf"
     try:
       res = requests.get(pdf_url, headers=HEADERS, timeout=2, verify=False)
       if res.status_code == 200 and len(res.content) > 1000:
-        return check_date, res.content
+        return check_date.strftime("%d/%m/%Y"), res.content
     except Exception:
       continue
   return None, None
 
 
-def analyze_three_workdays(pdf_bytes, dates_info_json, pdf_date_str):
+@cached(ai_cache)
+def analyze_three_workdays(pdf_date_str, dates_info_json, pdf_bytes):
   fallback = [
       {
           "ngay": "N/A",
@@ -142,8 +150,20 @@ def analyze_three_workdays(pdf_bytes, dates_info_json, pdf_date_str):
   return fallback
 
 
-@app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
+@app.route("/clear-cache")
+def clear_cache():
+  pwd = request.args.get("pwd")
+  if pwd == ADMIN_PASSWORD:
+    weather_cache.clear()
+    pdf_cache.clear()
+    ai_cache.clear()
+    return redirect(url_for("index", msg="cleared"))
+  return "<h3>❌ Mật khẩu không chính xác! Không thể xóa Cache.</h3>", 403
+
+
+@app.route("/")
+def index():
+  msg = request.args.get("msg")
   now_vn = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
   today_date = now_vn.date()
   three_workdays = get_three_workdays(today_date)
@@ -152,15 +172,12 @@ async def dashboard(request: Request):
       fetch_hourly_weather_thao_dien(d.strftime("%Y-%m-%d"))
       for d in three_workdays
   ]
-  pdf_date, pdf_bytes = fetch_latest_pdf(today_date)
-  pdf_date_str = (
-      pdf_date.strftime("%d/%m/%Y")
-      if pdf_date
-      else today_date.strftime("%d/%m/%Y")
-  )
+  pdf_date_str, pdf_bytes = fetch_latest_pdf(today_date.strftime("%Y-%m-%d"))
 
   ai_data = analyze_three_workdays(
-      pdf_bytes, json.dumps(weather_list), pdf_date_str
+      pdf_date_str or today_date.strftime("%d/%m/%Y"),
+      json.dumps(weather_list),
+      pdf_bytes,
   )
 
   cards = []
@@ -199,12 +216,16 @@ async def dashboard(request: Request):
         "evening_prob": w_data["evening_prob"],
     })
 
-  return templates.TemplateResponse(
+  return render_template(
       "index.html",
-      {
-          "request": request,
-          "now_time": now_vn.strftime("%H:%M:%S"),
-          "now_date": now_vn.strftime("%d/%m/%Y"),
-          "cards": cards,
-      },
+      cards=cards,
+      now_time=now_vn.strftime("%H:%M:%S"),
+      now_date=now_vn.strftime("%d/%m/%Y"),
+      msg=msg,
+      admin_pwd=ADMIN_PASSWORD,
   )
+
+
+if __name__ == "__main__":
+  # Chạy ứng dụng trên cổng 5000 chuẩn Flask
+  app.run(host="0.0.0.0", port=5000, debug=True)
