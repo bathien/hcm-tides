@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Tự động refresh mỗi 5 phút (300 giây) -->
     <meta http-equiv="refresh" content="300">
     <title>CẢNH BÁO NGẬP & WFH Banqup VN</title>
     <style>
@@ -20,7 +19,17 @@
         .header-table { width: 100%; border-bottom: 2px solid #334155; padding-bottom: 12px; margin-bottom: 16px; }
         .header-title { font-size: 26px; font-weight: bold; color: #38bdf8; white-space: nowrap; }
         .header-time { text-align: right; font-size: 16px; color: #94a3b8; white-space: nowrap; }
-        .btn-refresh { color: #38bdf8; text-decoration: none; font-weight: bold; margin-left: 8px; background-color: #1e293b; padding: 4px 8px; border-radius: 4px; border: 1px solid #334155; }
+        .btn-refresh { 
+            color: #38bdf8; 
+            text-decoration: none; 
+            font-weight: bold; 
+            margin-left: 8px; 
+            background-color: #1e293b; 
+            padding: 6px 12px; 
+            border-radius: 4px; 
+            border: 1px solid #334155;
+            cursor: pointer;
+        }
         .dashboard-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 12px 0; }
         .card-td { vertical-align: top; padding: 0; }
         .card { background-color: #0f172a; border: 2px solid #1e293b; border-radius: 12px; padding: 16px; }
@@ -35,6 +44,49 @@
         .m-value { font-size: 22px; font-weight: bold; margin: 2px 0; }
         .m-sub { font-size: 11px; color: #cbd5e1; margin-top: 2px; }
         .alert-bar { background-color: #065f46; color: #ffffff; text-align: center; padding: 8px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
+
+        /* DIALOG POPUP STYLES */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 9999;
+        }
+        .modal-box {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: #0f172a;
+            border: 2px solid #38bdf8;
+            border-radius: 12px;
+            padding: 24px;
+            width: 380px;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+        }
+        .modal-title { font-size: 18px; font-weight: bold; color: #f8fafc; margin-bottom: 12px; }
+        .modal-input {
+            width: 100%;
+            padding: 10px;
+            margin: 12px 0;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            background: #1e293b;
+            color: #fff;
+            font-size: 16px;
+            text-align: center;
+        }
+        .modal-btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 0 4px;
+        }
+        .btn-confirm { background: #0284c7; color: white; }
+        .btn-cancel { background: #475569; color: white; }
     </style>
 </head>
 <body>
@@ -44,7 +96,7 @@
             <td class="header-title">🚨 CẢNH BÁO NGẬP & WFH Banqup VN</td>
             <td class="header-time">
                 🕒 {{ now_time }} &nbsp;|&nbsp; 📅 {{ now_date }}
-                <a href="/clear-cache?pwd={{ admin_pwd }}" class="btn-refresh">🔄 Làm mới</a>
+                <button onclick="openPasswordDialog()" class="btn-refresh">🔄 Làm mới</button>
             </td>
         </tr>
     </table>
@@ -100,27 +152,55 @@
         </tr>
     </table>
 
-    <!-- SCRIPT TỰ ĐỘNG LÀM MỚI TRANG ĐÚNG 11:00 AM MỖI NGÀY -->
+    <!-- DIALOG NHẬP MẬT KHẨU -->
+    <div id="pwdModal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-title">🔑 BẢO MẬT: XÁC NHẬN LÀM MỚI</div>
+            <div style="font-size: 13px; color: #94a3b8;">Vui lòng nhập mật khẩu quản trị viên:</div>
+            <input type="password" id="pwdInput" class="modal-input" placeholder="Mật khẩu..." onkeyup="handleKeyUp(event)">
+            <div>
+                <button onclick="submitClearCache()" class="modal-btn btn-confirm">Xác nhận</button>
+                <button onclick="closePasswordDialog()" class="modal-btn btn-cancel">Hủy</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        function openPasswordDialog() {
+            document.getElementById('pwdModal').style.display = 'block';
+            document.getElementById('pwdInput').focus();
+        }
+
+        function closePasswordDialog() {
+            document.getElementById('pwdModal').style.display = 'none';
+            document.getElementById('pwdInput').value = '';
+        }
+
+        function submitClearCache() {
+            var pwd = document.getElementById('pwdInput').value;
+            if (pwd) {
+                window.location.href = "/clear-cache?pwd=" + encodeURIComponent(pwd);
+            }
+        }
+
+        function handleKeyUp(event) {
+            if (event.key === "Enter") {
+                submitClearCache();
+            }
+        }
+
+        // Tự động làm mới đúng 11:00 AM
         function schedule11AMReload() {
             var now = new Date();
             var target = new Date();
-            
-            target.setHours(11, 0, 0, 0); // Đặt mốc 11:00:00 AM
-            
-            // Nếu thời gian hiện tại đã qua 11 AM, hẹn mốc 11 AM ngày tiếp theo
+            target.setHours(11, 0, 0, 0);
             if (now.getTime() >= target.getTime()) {
                 target.setDate(target.getDate() + 1);
             }
-            
-            var timeUntil11AM = target.getTime() - now.getTime();
-            
             setTimeout(function() {
-                // Tự động chuyển hướng tới đường dẫn làm mới cache
-                window.location.href = "/clear-cache?pwd={{ admin_pwd }}";
-            }, timeUntil11AM);
+                window.location.reload();
+            }, target.getTime() - now.getTime());
         }
-
         schedule11AMReload();
     </script>
 

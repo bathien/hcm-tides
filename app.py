@@ -235,7 +235,6 @@ def index():
       now_time=now_vn.strftime("%H:%M:%S"),
       now_date=now_vn.strftime("%d/%m/%Y"),
       msg=msg,
-      admin_pwd=ADMIN_PASSWORD,
   )
 
 
