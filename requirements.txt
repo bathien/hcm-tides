@@ -1,4 +1,6 @@
-streamlit
+fastapi
+uvicorn
+jinja2
 requests
-urllib3
 google-genai
+urllib3
