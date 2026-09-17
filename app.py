@@ -18,7 +18,7 @@ HEADERS = {
 }
 
 st.set_page_config(
-    page_title="CẢNH BÁO NGẬP & WFH Banqup VN",
+    page_title="CANH BAO NGAP & WFH Banqup VN",
     page_icon="🚨",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -28,10 +28,20 @@ GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY")
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
 
 if not GEMINI_API_KEY:
-  st.error("⚠️ LỖI CẤU HÌNH: Chưa cài đặt GEMINI_API_KEY trong Secrets.")
+  st.error("LỖI CẤU HÌNH: Chưa cài đặt GEMINI_API_KEY trong Secrets.")
   st.stop()
 
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
+
+
+# HÀM LÀM SẠCH CHUỖI TUYỆT ĐỐI CHO TIZEN 3.5
+def clean_str(text):
+  if text is None:
+    return ""
+  s = str(text)
+  s = s.replace("\n", " ").replace("\r", " ").replace('"', "'")
+  s = re.sub(r"<[^>]+>", "", s)  # Bỏ mọi thẻ HTML lồng ngầm
+  return s.strip()
 
 
 def get_three_workdays(from_date):
@@ -100,13 +110,13 @@ def analyze_three_workdays_wfh_cached(pdf_bytes, dates_info_json, pdf_date_str):
   fallback_response = [
       {
           "ngay": "N/A",
-          "label": "HÔM NAY",
+          "label": "HOM NAY",
           "dinh_trieu": "1.55m",
           "gio_dinh_trieu": "17h00",
           "bao_dong": "BD1",
-          "khuyen_nghi_wfh": "ĐẾN VĂN PHÒNG",
+          "khuyen_nghi_wfh": "DEN VAN PHONG",
           "muc_do_wfh": "SAFE",
-          "ly_do_wfh": "Thời tiết và thủy văn ổn định.",
+          "ly_do_wfh": "Thoi tiet va thuy van binh thuong.",
       },
       {
           "ngay": "N/A",
@@ -114,9 +124,9 @@ def analyze_three_workdays_wfh_cached(pdf_bytes, dates_info_json, pdf_date_str):
           "dinh_trieu": "1.55m",
           "gio_dinh_trieu": "18h00",
           "bao_dong": "BD1",
-          "khuyen_nghi_wfh": "ĐẾN VĂN PHÒNG",
+          "khuyen_nghi_wfh": "DEN VAN PHONG",
           "muc_do_wfh": "SAFE",
-          "ly_do_wfh": "Thời tiết và thủy văn ổn định.",
+          "ly_do_wfh": "Thoi tiet va thuy van binh thuong.",
       },
       {
           "ngay": "N/A",
@@ -124,9 +134,9 @@ def analyze_three_workdays_wfh_cached(pdf_bytes, dates_info_json, pdf_date_str):
           "dinh_trieu": "1.55m",
           "gio_dinh_trieu": "19h00",
           "bao_dong": "BD1",
-          "khuyen_nghi_wfh": "ĐẾN VĂN PHÒNG",
+          "khuyen_nghi_wfh": "DEN VAN PHONG",
           "muc_do_wfh": "SAFE",
-          "ly_do_wfh": "Thời tiết và thủy văn ổn định.",
+          "ly_do_wfh": "Thoi tiet va thuy van binh thuong.",
       },
   ]
   if not pdf_bytes or len(pdf_bytes) < 100:
@@ -139,9 +149,9 @@ def analyze_three_workdays_wfh_cached(pdf_bytes, dates_info_json, pdf_date_str):
         
         Trả về ĐÚNG CẤU TRÚC JSON MẢNG:
         [
-            {{"ngay": "DD/MM/YYYY", "label": "HÔM NAY", "dinh_trieu": "1.68m", "gio_dinh_trieu": "17h30", "bao_dong": "BD3", "khuyen_nghi_wfh": "NÊN LÀM VIỆC TẠI NHÀ (WFH)", "muc_do_wfh": "DANGER", "ly_do_wfh": "Triều BD3 kết hợp mưa ca chiều trên 30mm gây ngập sâu."}},
-            {{"ngay": "DD/MM/YYYY", "label": "NEXT WORKDAY 1", "dinh_trieu": "1.62m", "gio_dinh_trieu": "18h10", "bao_dong": "BD3", "khuyen_nghi_wfh": "CÂN NHẮC WFH", "muc_do_wfh": "WARNING", "ly_do_wfh": "Triều BD3 lúc 18h10 nguy cơ ngập nhẹ ca đi về."}},
-            {{"ngay": "DD/MM/YYYY", "label": "NEXT WORKDAY 2", "dinh_trieu": "1.52m", "gio_dinh_trieu": "19h00", "bao_dong": "BD2", "khuyen_nghi_wfh": "ĐẾN VĂN PHÒNG", "muc_do_wfh": "SAFE", "ly_do_wfh": "Thời tiết thuận lợi cả 2 ca đi lại."}}
+            {{"ngay": "DD/MM/YYYY", "label": "HOM NAY", "dinh_trieu": "1.68m", "gio_dinh_trieu": "17h30", "bao_dong": "BD3", "khuyen_nghi_wfh": "NEN LAM VIEC TAI NHA (WFH)", "muc_do_wfh": "DANGER", "ly_do_wfh": "Trieu BD3 ket hop mua ca chieu tren 30mm gay ngap sau."}},
+            {{"ngay": "DD/MM/YYYY", "label": "NEXT WORKDAY 1", "dinh_trieu": "1.62m", "gio_dinh_trieu": "18h10", "bao_dong": "BD3", "khuyen_nghi_wfh": "CAN NHAC WFH", "muc_do_wfh": "WARNING", "ly_do_wfh": "Trieu BD3 luc 18h10 nguy co ngap nhe ca di ve."}},
+            {{"ngay": "DD/MM/YYYY", "label": "NEXT WORKDAY 2", "dinh_trieu": "1.52m", "gio_dinh_trieu": "19h00", "bao_dong": "BD2", "khuyen_nghi_wfh": "DEN VAN PHONG", "muc_do_wfh": "SAFE", "ly_do_wfh": "Thoi tiet thuan loi ca 2 ca di lai."}}
         ]
         """
     response = ai_client.models.generate_content(
@@ -159,17 +169,17 @@ def analyze_three_workdays_wfh_cached(pdf_bytes, dates_info_json, pdf_date_str):
   return fallback_response
 
 
-@st.dialog("🔑 BẢO MẬT: XÁC NHẬN LÀM MỚI CACHE")
+@st.dialog("BẢO MẬT: XÁC NHẬN LÀM MỚI CACHE")
 def request_clear_cache_dialog():
   st.write("Vui lòng nhập mật khẩu quản trị viên để làm mới dữ liệu:")
   pwd_input = st.text_input("Mật khẩu:", type="password")
   if st.button("Xác nhận làm mới"):
     if ADMIN_PASSWORD and pwd_input == ADMIN_PASSWORD:
       st.cache_data.clear()
-      st.success("✅ Đã xóa Cache thành công!")
+      st.success("Đã xóa Cache thành công!")
       st.rerun()
     else:
-      st.error("❌ Mật khẩu không chính xác.")
+      st.error("Mật khẩu không chính xác.")
 
 
 now_vn = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
@@ -200,7 +210,7 @@ three_days_data = analyze_three_workdays_wfh_cached(
     pdf_bytes, dates_info_json, pdf_date_label
 )
 
-# HTML/CSS SIÊU PHẲNG - BỎ HOÀN TOÀN BORDER-RADIUS VÀ BORDER LỒNG
+# RENDER BẢNG TIZEN 3.5 CLEANED & SAFE
 cards_code = ""
 for idx in range(3):
   raw_item = (
@@ -212,59 +222,64 @@ for idx in range(3):
   d_obj = three_workdays[idx]
   w_data = fetch_hourly_weather_thao_dien(d_obj.strftime("%Y-%m-%d"))
 
-  label_str = str(raw_item.get("label", "NGÀY LÀM VIỆC"))
-  wfh_str = str(raw_item.get("khuyen_nghi_wfh", "ĐẾN VĂN PHÒNG"))
-  ly_do_str = str(raw_item.get("ly_do_wfh", "Thời tiết ổn định"))
-  trieu_str = str(raw_item.get("dinh_trieu", "--"))
-  gio_str = str(raw_item.get("gio_dinh_trieu", "--"))
-  bd_str = str(raw_item.get("bao_dong", "--"))
-  muc_do = str(raw_item.get("muc_do_wfh", "SAFE")).upper()
+  # LÀM SẠCH CHUỖI CHẮC CHẮN KHÔNG CÓ NEWLINE HOẶC DẤU NGOẶC KÉP LÀM HỎNG HTML
+  label_str = clean_str(raw_item.get("label", "WORKDAY"))
+  wfh_str = clean_str(raw_item.get("khuyen_nghi_wfh", "DEN VAN PHONG"))
+  ly_do_str = clean_str(raw_item.get("ly_do_wfh", "Thoi tiet binh thuong"))
+  trieu_str = clean_str(raw_item.get("dinh_trieu", "--"))
+  gio_str = clean_str(raw_item.get("gio_dinh_trieu", "--"))
+  bd_str = clean_str(raw_item.get("bao_dong", "--"))
+  muc_do = clean_str(raw_item.get("muc_do_wfh", "SAFE")).upper()
 
-  card_bg_color = "#065f46"
-  status_icon = "✅"
+  card_bg_color = "#065f46"  # Xanh
+  status_icon = "OK"
   if "DANGER" in muc_do:
-    card_bg_color = "#991b1b"
-    status_icon = "🚨"
+    card_bg_color = "#991b1b"  # Đỏ
+    status_icon = "CANH BAO"
   elif "WARN" in muc_do:
-    card_bg_color = "#854d0e"
-    status_icon = "⚠️"
+    card_bg_color = "#854d0e"  # Cam
+    status_icon = "LUU Y"
 
-  # SỬ DỤNG BẢNG HTML4 CỔ ĐIỂN - GÓC VUÔNG TUYỆT ĐỐI (NO BORDER-RADIUS)
+  m_rain_str = clean_str(w_data["morning_rain"])
+  m_prob_str = clean_str(w_data["morning_prob"])
+  e_rain_str = clean_str(w_data["evening_rain"])
+  e_prob_str = clean_str(w_data["evening_prob"])
+
+  # DÙNG THẺ TABLE CHUẨN HTML3/4 (KHÔNG DÙNG FONT / KHÔNG SPAN ĐỀU DỊCH CẤU TRÚC)
   cards_code += f"""
-    <td width="33%" valign="top" style="padding: 2px; height: 1000px">
+    <td width="33%" valign="top" style="padding: 2px;">
         <table width="100%" border="0" cellspacing="0" cellpadding="4" style="background-color: #0f172a;">
             <tr>
                 <td align="center" style="font-size: 13px; font-weight: bold; color: #f8fafc; background-color: #1e293b;">
-                    📌 {label_str} ({d_obj.strftime('%d/%m')})
+                    {label_str} ({d_obj.strftime('%d/%m')})
                 </td>
             </tr>
             <tr>
                 <td style="background-color: {card_bg_color}; color: #ffffff; padding: 6px;">
-                    <font style="font-size: 9px; font-weight: bold; text-transform: uppercase;">KHUYẾN NGHỊ LÀM VIỆC:</font><br>
-                    <font style="font-size: 13px; font-weight: bold;">{status_icon} {wfh_str}</font><br>
-                    <font style="font-size: 10px;">👉 {ly_do_str}</font>
+                    <div style="font-size: 9px; font-weight: bold; text-transform: uppercase;">KHUYEN NGHI LAM VIEC:</div>
+                    <div style="font-size: 13px; font-weight: bold; margin: 2px 0;">[{status_icon}] {wfh_str}</div>
+                    <div style="font-size: 10px;">> {ly_do_str}</div>
                 </td>
             </tr>
             <tr>
                 <td style="background-color: #1e293b; color: #94a3b8; font-size: 10px; padding: 4px;">
-                    🌊 TRIỀU: <font color="#38bdf8"><b>{trieu_str}</b></font> (⏰ {gio_str}) | <font color="#ef4444"><b>{bd_str}</b></font>
+                    TRIEU: <b style="color: #38bdf8;">{trieu_str}</b> (Gio: {gio_str}) | <b style="color: #ef4444;">{bd_str}</b>
                 </td>
             </tr>
             <tr>
                 <td style="background-color: #1e293b; color: #94a3b8; font-size: 10px; padding: 4px;">
-                    🌅 SÁNG (7h-9h): <font color="#60a5fa"><b>{w_data['morning_rain']} mm</b></font> (☔ {w_data['morning_prob']}%)
+                    MUA SANG (7h-9h): <b style="color: #60a5fa;">{m_rain_str} mm</b> (XS: {m_prob_str}%)
                 </td>
             </tr>
             <tr>
                 <td style="background-color: #1e293b; color: #94a3b8; font-size: 10px; padding: 4px;">
-                    🌇 CHIỀU (17h-19h): <font color="#a78bfa"><b>{w_data['evening_rain']} mm</b></font> (☔ {w_data['evening_prob']}%)
+                    MUA CHIEU (17h-19h): <b style="color: #a78bfa;">{e_rain_str} mm</b> (XS: {e_prob_str}%)
                 </td>
             </tr>
         </table>
     </td>
     """
 
-# KHUNG HTML TỔNG - TRIỆT TIỆU TOÀN BỘ CSS3 NÂNG CAO
 pure_tizen_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -284,10 +299,10 @@ pure_tizen_canvas = f"""
     <table width="100%" border="0" cellspacing="0" cellpadding="2" style="margin-bottom: 4px;">
         <tr>
             <td style="font-size: 14px; font-weight: bold; color: #38bdf8;">
-                🚨 CẢNH BÁO NGẬP & WFH Banqup VN
+                CANH BAO NGAP & WFH Banqup VN
             </td>
             <td align="right" style="font-size: 10px; color: #94a3b8;">
-                🕒 {now_vn.strftime('%H:%M:%S')} | 📅 {now_vn.strftime('%d/%m/%Y')}
+                {now_vn.strftime('%H:%M:%S')} | {now_vn.strftime('%d/%m/%Y')}
             </td>
         </tr>
     </table>
@@ -303,5 +318,5 @@ pure_tizen_canvas = f"""
 
 st.html(pure_tizen_canvas)
 
-if st.button("🔄 Làm mới dữ liệu ngay"):
+if st.button("Làm mới dữ liệu ngay"):
   request_clear_cache_dialog()
