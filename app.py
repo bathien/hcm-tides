@@ -1,13 +1,14 @@
 import datetime
-import io
 import json
 import re
+import pandas as pd
 import requests
 import streamlit as st
 import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# CONFIGURATION
 MODEL_NAME = "gemini-3.6-flash"
 BASE_DOMAIN = "https://www.phongchonglutbaotphcm.gov.vn"
 HEADERS = {
@@ -16,6 +17,7 @@ HEADERS = {
     )
 }
 
+# 1. PAGE SETUP
 st.set_page_config(
     page_title="CẢNH BÁO NGẬP & WFH Banqup VN",
     page_icon="🚨",
@@ -23,56 +25,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# RESET CSS ÉP DÙNG BLOCK DIV PURE FLEX NATIVE
-st.markdown(
-    """
-    <style>
-        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-            background-color: #030712 !important;
-            color: #f8fafc !important;
-            font-family: Arial, sans-serif !important;
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-        header, footer, #MainMenu { visibility: hidden !important; display: none !important; }
-        .block-container { padding: 6px !important; margin: 0 !important; max-width: 100% !important; }
-
-        /* KHUNG CHÍNH CHIA 3 CỘT BẰNG BLOCK DIV */
-        .tv-grid {
-            width: 100%;
-            white-space: nowrap;
-        }
-        .tv-col {
-            display: inline-block;
-            width: 32.8%;
-            vertical-align: top;
-            white-space: normal;
-            box-sizing: border-box;
-            padding: 2px;
-        }
-        .tv-card {
-            background-color: #0f172a;
-            border: 1px solid #1e293b;
-            border-radius: 6px;
-            padding: 6px;
-        }
-        .tv-box {
-            background-color: #1e293b;
-            padding: 5px;
-            border-radius: 4px;
-            margin-bottom: 4px;
-            text-align: center;
-        }
-
-        button {
-            width: 100%; background-color: #0284c7 !important; color: #ffffff !important;
-            border-radius: 4px !important; border: none !important; font-size: 11px !important;
-        }
-    </style>
-""",
-    unsafe_allow_html=True,
-)
-
+# 2. CHECK SECRETS
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY")
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
 
@@ -81,6 +34,7 @@ if not GEMINI_API_KEY:
   st.stop()
 
 
+# 3. HELPER FUNCTIONS
 def get_three_workdays(from_date):
   workdays = []
   current = from_date
@@ -216,6 +170,7 @@ def request_clear_cache_dialog():
       st.error("❌ Mật khẩu không chính xác.")
 
 
+# 4. DATA PROCESSING
 now_vn = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
 today_date = now_vn.date()
 three_workdays = get_three_workdays(today_date)
@@ -243,8 +198,26 @@ three_days_data = analyze_three_workdays_wfh_cached(
     pdf_bytes, dates_info_json, pdf_date_label, GEMINI_API_KEY
 )
 
-# DỰNG CỘT BẰNG HOÀN TOÀN THẺ DIV (CHỐNG LỖI FILTER TABLE CỦA STREAMLIT)
-cols_html = ""
+# 5. HEADER UI (NATIVE STREAMLIT)
+head_col1, head_col2, head_col3 = st.columns([3, 1, 1])
+
+with head_col1:
+  st.title("🚨 CẢNH BÁO NGẬP & WFH Banqup VN")
+
+with head_col2:
+  st.caption(
+      f"🕒 {now_vn.strftime('%H:%M:%S')} | 📅 {now_vn.strftime('%d/%m/%Y')}"
+  )
+
+with head_col3:
+  if st.button("🔄 Làm mới dữ liệu"):
+    request_clear_cache_dialog()
+
+st.divider()
+
+# 6. BODY UI (NATIVE STREAMLIT COMPONENTS ONLY)
+cols = st.columns(3)
+
 for idx in range(3):
   item = (
       three_days_data[idx]
@@ -254,70 +227,52 @@ for idx in range(3):
   d_obj = three_workdays[idx]
   w_data = fetch_hourly_weather_thao_dien(d_obj.strftime("%Y-%m-%d"))
 
-  card_bg_color = "#065f46"
-  wfh_icon = "✅"
-  if item.get("muc_do_wfh") == "DANGER":
-    card_bg_color = "#991b1b"
-    wfh_icon = "🚨"
-  elif item.get("muc_do_wfh") == "WARNING":
-    card_bg_color = "#854d0e"
-    wfh_icon = "⚠️"
+  status = item.get("muc_do_wfh", "SAFE")
 
-  cols_html += f"""
-    <div class="tv-col">
-        <div class="tv-card">
-            <div style="color: #f8fafc; font-weight: bold; font-size: 13px; text-align: center; margin-bottom: 5px;">
-                📌 {item.get('label', '')} ({d_obj.strftime('%d/%m')})
-            </div>
-            
-            <div style="background-color: {card_bg_color}; padding: 6px; border-radius: 4px; color: #ffffff; margin-bottom: 6px;">
-                <div style="font-size: 9px; font-weight: bold; text-transform: uppercase;">KHUYẾN NGHỊ LÀM VIỆC:</div>
-                <div style="font-size: 13px; font-weight: bold; margin: 2px 0;">{wfh_icon} {item.get('khuyen_nghi_wfh', 'N/A')}</div>
-                <div style="font-size: 9px; line-height: 1.2;">👉 {item.get('ly_do_wfh', 'N/A')}</div>
-            </div>
+  with cols[idx]:
+    with st.container(border=True):
+      st.subheader(f"📌 {item.get('label', '')} ({d_obj.strftime('%d/%m')})")
 
-            <div class="tv-box">
-                <span style="font-size: 10px; color: #94a3b8;">🌊 TRIỀU: </span>
-                <b style="color: #38bdf8; font-size: 12px;">{item.get('dinh_trieu', 'N/A')}</b> 
-                <span style="font-size: 10px; color: #f1f5f9;">(⏰ {item.get('gio_dinh_trieu', 'N/A')})</span> | 
-                <b style="color: #ef4444; font-size: 11px;">{item.get('bao_dong', 'N/A')}</b>
-            </div>
+      # Callout Box thay thế thẻ HTML nhiều màu
+      wfh_msg = f"**{item.get('khuyen_nghi_wfh', 'N/A')}**\n\n👉 {item.get('ly_do_wfh', 'N/A')}"
+      if status == "DANGER":
+        st.error(f"🚨 {wfh_msg}")
+      elif status == "WARNING":
+        st.warning(f"⚠️ {wfh_msg}")
+      else:
+        st.success(f"✅ {wfh_msg}")
 
-            <div class="tv-box">
-                <span style="font-size: 10px; color: #94a3b8;">🌅 SÁNG (7h-9h): </span>
-                <b style="color: #60a5fa; font-size: 12px;">{w_data['morning_rain']} mm</b> 
-                <span style="font-size: 10px; color: #f1f5f9;">(☔ {w_data['morning_prob']}%)</span>
-            </div>
+      st.markdown("---")
 
-            <div class="tv-box">
-                <span style="font-size: 10px; color: #94a3b8;">🌇 CHIỀU (17h-19h): </span>
-                <b style="color: #a78bfa; font-size: 12px;">{w_data['evening_rain']} mm</b> 
-                <span style="font-size: 10px; color: #f1f5f9;">(☔ {w_data['evening_prob']}%)</span>
-            </div>
-        </div>
-    </div>
-    """
+      # Trích xuất thông số dùng st.metric gốc
+      m1, m2 = st.columns(2)
+      with m1:
+        st.metric(
+            label="🌊 ĐỈNH TRIỀU PHÚ AN",
+            value=item.get("dinh_trieu", "N/A"),
+            delta=f"⏰ {item.get('gio_dinh_trieu', 'N/A')}",
+            delta_color="off",
+        )
+      with m2:
+        st.metric(
+            label="🚨 BÁO ĐỘNG",
+            value=item.get("bao_dong", "N/A"),
+            delta="Trạm Phú An",
+            delta_color="off",
+        )
 
-full_dashboard_html = f"""
-<div style="background-color: #030712; padding: 2px;">
-    <div style="margin-bottom: 6px; overflow: hidden;">
-        <span style="font-size: 15px; font-weight: bold; color: #38bdf8; float: left;">
-            🚨 CẢNH BÁO NGẬP & WFH Banqup VN
-        </span>
-        <span style="font-size: 11px; color: #94a3b8; float: right;">
-            🕒 {now_vn.strftime('%H:%M:%S')} | 📅 {now_vn.strftime('%d/%m/%Y')}
-        </span>
-    </div>
-    <div style="clear: both;"></div>
-
-    <div class="tv-grid">
-        {cols_html}
-    </div>
-</div>
-"""
-
-# HOÀN TOÀN BỎ STREAMLIT TABLE - RENDER DIV BLOCK NATIVE
-st.markdown(full_dashboard_html, unsafe_allow_html=True)
-
-if st.button("🔄 Làm mới dữ liệu ngay"):
-  request_clear_cache_dialog()
+      m3, m4 = st.columns(2)
+      with m3:
+        st.metric(
+            label="🌅 SÁNG (7h-9h)",
+            value=f"{w_data['morning_rain']} mm",
+            delta=f"☔ XS {w_data['morning_prob']}%",
+            delta_color="off",
+        )
+      with m4:
+        st.metric(
+            label="🌇 CHIỀU (17h-19h)",
+            value=f"{w_data['evening_rain']} mm",
+            delta=f"☔ XS {w_data['evening_prob']}%",
+            delta_color="off",
+        )
