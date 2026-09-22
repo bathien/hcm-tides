@@ -132,14 +132,83 @@ def analyze_three_workdays(pdf_date_str, dates_info_json, pdf_bytes, data_ver):
     return fallback
   try:
     client = genai.Client(api_key=GEMINI_API_KEY)
+    
     prompt = f"""
-        Bạn là chuyên gia phân tích rủi ro ngập lụt khu vực THẢO ĐIỀN (TP. Thủ Đức) cho Banqup VN.
-        Tệp PDF phát hành: {pdf_date_str}. Dữ liệu thời tiết: {dates_info_json}
-        Trả về ĐÚNG MẢNG JSON 3 PHẦN TỬ (không ký tự xuống dòng trong chuỗi):
+        Bạn là chuyên gia Phân tích Rủi ro Giao thông & Cảnh báo Ngập lụt nghiêm ngặt cho khu vực THẢO ĐIỀN (TP. Thủ Đức, TP.HCM) thuộc công ty Banqup VN.
+        Tệp PDF thủy văn phát hành ngày: {pdf_date_str}.
+        Dữ liệu thời tiết 3 ngày làm việc (Mưa & Xác suất mưa ca sáng 7h-9h và ca chiều 17h-19h): {dates_info_json}
+
+        ========================================================================
+        ĐẶC THÙ ĐỊA HÌNH & NGUYÊN TẮC AN TOÀN BẮT BUỘC TẠI THẢO ĐIỀN:
+        1. ĐỊA HÌNH LÒNG CHẢO: Thảo Điền (Quốc Hương, Xuân Thủy, Nguyễn Văn Hưởng, Đỗ Quang) nằm ở cao độ thấp (0.5m - 1.2m), bao bọc 3 mặt bởi sông Sài Gòn.
+        2. TÁC ĐỘNG KÉP: Chỉ cần Mưa rào bộc phát ngắn (>15mm) HOẶC Triều Phú An dâng >= 1.40m là các cống xả bị khóa ngược, gây ngập nhanh 20-50cm, chết máy và tê liệt giao thông ca đi làm/về.
+        3. QUY TẮC NGUYÊN TẮC AN TOÀN TỐI ĐA (STRICT SAFETY BASELINE): Thà cảnh báo nhầm (Over-warn) còn hơn để nhân viên kẹt xe / chết máy trong vùng ngập.
+
+        ========================================================================
+        QUY TẮC ĐÁNH GIÁ VÀ PHÂN LOẠI TRẠNG THÁI WFH BẮT BUỘC (ĐỌC KỸ):
+
+        🔴 TRẠNG THÁI 1: DANGER -> "NÊN LÀM VIỆC TẠI NHÀ (WFH)"
+        Gán "muc_do_wfh": "DANGER" khi vi phạm BẤT KỲ điều kiện nào sau đây:
+        - Đỉnh triều trạm Phú An >= 1.55m (Báo động 1 trở lên).
+        - Lượng mưa ca sáng (7h-9h) HOẶC ca chiều (17h-19h) >= 15mm.
+        - Tác động kết hợp: Mưa >= 5mm VÀ Triều >= 1.40m trong khung giờ cao điểm.
+        - Xác suất mưa ca sáng HOẶC ca chiều >= 65%.
+
+        🟡 TRẠNG THÁI 2: WARNING -> "CÂN NHẮC WFH"
+        Gán "muc_do_wfh": "WARNING" khi rơi vào các trường hợp sau:
+        - Đỉnh triều trạm Phú An từ 1.40m đến 1.54m.
+        - Lượng mưa ca sáng HOẶC ca chiều từ 5mm đến 14mm.
+        - Xác suất mưa ca sáng HOẶC ca chiều từ 40% đến 64%.
+        - Triều dâng rơi đúng vào khung giờ tan tầm (17h00 - 19h00).
+
+        🟢 TRẠNG THÁI 3: SAFE -> "ĐẾN VĂN PHÒNG"
+        CHỈ ĐƯỢC GÁN "muc_do_wfh": "SAFE" KHI VÀ CHỈ KHI THỎA MÃN TẤT CẢ ĐIỀU KIỆN SAU:
+        - Đỉnh triều trạm Phú An < 1.40m (Dưới BD1 xa).
+        - Lượng mưa ca sáng VÀ ca chiều < 5mm (Khô ráo/mưa nhỏ không đáng kể).
+        - Xác suất mưa cả 2 ca < 40%.
+
+        ⚠️ CẤM TUYỆT ĐỐI: KHÔNG ĐƯỢC đưa ra khuyến nghị "ĐẾN VĂN PHÒNG" nếu có bất kỳ nguy cơ mưa giông hay triều >= 1.40m vào khung giờ 7h-9h hoặc 17h-19h.
+
+        ========================================================================
+        YÊU CẦU ĐẦU RA (OUTPUT FORMAT):
+        Trả về ĐÚNG MẢNG JSON 3 PHẦN TỬ tương ứng với 3 ngày làm việc.
+        LƯU Ý KỸ THUẬT:
+        - Không sử dụng dấu nháy đôi (") bên trong nội dung văn bản.
+        - Không xuống dòng trong bất kỳ chuỗi văn bản nào.
+        - Chuỗi lý do "ly_do_wfh" phải giải thích cụ thể tác động (Ví dụ: đề cập rõ mốc giờ triều, lượng mưa ca sáng/chiều, đường nguy cơ ngập như Quốc Hương, Nguyễn Văn Hưởng).
+
+        CẤU TRÚC JSON MẪU BẮT BUỘC:
         [
-            {{"ngay": "DD/MM/YYYY", "label": "HÔM NAY", "dinh_trieu": "1.68m", "gio_dinh_trieu": "17h30", "bao_dong": "BD3", "khuyen_nghi_wfh": "NÊN LÀM VIỆC TẠI NHÀ (WFH)", "muc_do_wfh": "DANGER", "ly_do_wfh": "Triều BD3 kết hợp mưa chiều >30mm gây ngập sâu Nguyễn Văn Hưởng."}},
-            {{"ngay": "DD/MM/YYYY", "label": "NGÀY LÀM VIỆC TIẾP THEO 1", "dinh_trieu": "1.62m", "gio_dinh_trieu": "18h10", "bao_dong": "BD3", "khuyen_nghi_wfh": "CÂN NHẮC WFH", "muc_do_wfh": "WARNING", "ly_do_wfh": "Triều BD3 lúc 18h10 nguy cơ ngập nhẹ Quốc Hương."}},
-            {{"ngay": "DD/MM/YYYY", "label": "NGÀY LÀM VIỆC TIẾP THEO 2", "dinh_trieu": "1.52m", "gio_dinh_trieu": "19h00", "bao_dong": "BD2", "khuyen_nghi_wfh": "ĐẾN VĂN PHÒNG", "muc_do_wfh": "SAFE", "ly_do_wfh": "Thời tiết thuận lợi cả 2 ca đi lại."}}
+            {{
+                "ngay": "DD/MM/YYYY",
+                "label": "HÔM NAY",
+                "dinh_trieu": "1.68m",
+                "gio_dinh_trieu": "17h30",
+                "bao_dong": "BD3",
+                "khuyen_nghi_wfh": "NÊN LÀM VIỆC TẠI NHÀ (WFH)",
+                "muc_do_wfh": "DANGER",
+                "ly_do_wfh": "Triều BD3 đạt 1.68m lúc 17h30 kết hợp mưa ca chiều >20mm gây ngập sâu 30-50cm tại Nguyễn Văn Hưởng và Xuân Thủy."
+            }},
+            {{
+                "ngay": "DD/MM/YYYY",
+                "label": "NGÀY LÀM VIỆC TIẾP THEO 1",
+                "dinh_trieu": "1.48m",
+                "gio_dinh_trieu": "18h10",
+                "bao_dong": "Dưới BD1",
+                "khuyen_nghi_wfh": "CÂN NHẮC WFH",
+                "muc_do_wfh": "WARNING",
+                "ly_do_wfh": "Triều 1.48m lúc 18h10 kết hợp xác suất mưa ca chiều 50% có thể gây ngập nhẹ đường Quốc Hương ca đi về."
+            }},
+            {{
+                "ngay": "DD/MM/YYYY",
+                "label": "NGÀY LÀM VIỆC TIẾP THEO 2",
+                "dinh_trieu": "1.32m",
+                "gio_dinh_trieu": "06h30",
+                "bao_dong": "Dưới BD1",
+                "khuyen_nghi_wfh": "ĐẾN VĂN PHÒNG",
+                "muc_do_wfh": "SAFE",
+                "ly_do_wfh": "Thời tiết ráo mát cả 2 ca đi lại, triều thấp dưới 1.40m không ảnh hưởng giao thông Thảo Điền."
+            }}
         ]
         """
     response = client.models.generate_content(
