@@ -13,7 +13,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
 
-MODEL_NAME = "gemini-3.6-flash"
+MODEL_NAME = "gemini-3.1-flash-lite"
 BASE_DOMAIN = "https://www.phongchonglutbaotphcm.gov.vn"
 HEADERS = {
     "User-Agent": (
