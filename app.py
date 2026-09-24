@@ -48,68 +48,105 @@ def get_three_workdays(from_date):
 
 @cached(weather_cache)
 def fetch_hourly_weather_thao_dien(target_date_str, data_ver):
-  url = (
-      f"https://api.open-meteo.com/v1/forecast?latitude=10.8031&longitude=106.7324"
-      f"&hourly=precipitation,precipitation_probability"
-      f"&timezone=Asia%2FBangkok&start_date={target_date_str}&end_date={target_date_str}"
-  )
-  print(f"\n[WEATHER LOG] Fetching: {url}")
+  api_key = os.getenv("WEATHER_API_KEY", "")
+
+  # Nếu chưa cài WEATHER_API_KEY -> Tự động dùng Met.no làm dự phòng (Không cần Key)
+  if not api_key:
+    return fetch_from_met_no(target_date_str)
+
+  url = f"http://api.weatherapi.com/v1/forecast.json?key={api_key}&q=10.8031,106.7324&dt={target_date_str}"
+  print(f"\n[WEATHER LOG] Fetching WeatherAPI.com for {target_date_str}")
 
   try:
     res = requests.get(url, timeout=5)
-    print(f"[WEATHER LOG] Status Code: {res.status_code}")
-
     if res.status_code == 200:
       data = res.json()
-      hourly = data.get("hourly", {})
-      times = hourly.get("time", [])
-      precip = hourly.get("precipitation", [])
-      prob = hourly.get("precipitation_probability", [])
+      forecast_days = data.get("forecast", {}).get("forecastday", [])
 
-      print(f"[WEATHER LOG] Received {len(times)} hourly records.")
-      print(f"[WEATHER LOG] Raw precip: {precip}")
-      print(f"[WEATHER LOG] Raw prob: {prob}")
+      if forecast_days:
+        hours = forecast_days[0].get("hour", [])
 
-      morning_rain_list = []
-      morning_prob_list = []
-      evening_rain_list = []
-      evening_prob_list = []
+        # Lọc giờ đi làm (7h, 8h, 9h)
+        morning_hours = [
+            h for h in hours if 7 <= int(h["time"].split()[1].split(":")[0]) <= 9
+        ]
+        # Lọc giờ tan tầm (17h, 18h, 19h)
+        evening_hours = [
+            h
+            for h in hours
+            if 17 <= int(h["time"].split()[1].split(":")[0]) <= 19
+        ]
 
-      for t_str, p_val, pr_val in zip(times, precip, prob, strict=False):
-        hour = int(t_str.split("T")[1].split(":")[0])
+        morning_rain = round(
+            sum(h.get("precip_mm", 0.0) for h in morning_hours), 1
+        )
+        morning_prob = max(
+            [h.get("chance_of_rain", 0) for h in morning_hours] or [0]
+        )
 
-        # Ca sáng: 7h, 8h, 9h
-        if 7 <= hour <= 9:
-          morning_rain_list.append(p_val or 0.0)
-          morning_prob_list.append(pr_val or 0)
+        evening_rain = round(
+            sum(h.get("precip_mm", 0.0) for h in evening_hours), 1
+        )
+        evening_prob = max(
+            [h.get("chance_of_rain", 0) for h in evening_hours] or [0]
+        )
 
-        # Ca chiều: 17h, 18h, 19h
-        elif 17 <= hour <= 19:
-          evening_rain_list.append(p_val or 0.0)
-          evening_prob_list.append(pr_val or 0)
-
-      morning_rain = round(sum(morning_rain_list), 1)
-      morning_prob = max(morning_prob_list) if morning_prob_list else 0
-
-      evening_rain = round(sum(evening_rain_list), 1)
-      evening_prob = max(evening_prob_list) if evening_prob_list else 0
-
-      result = {
-          "morning_rain": morning_rain,
-          "morning_prob": morning_prob,
-          "evening_rain": evening_rain,
-          "evening_prob": evening_prob,
-      }
-      print(
-          f"[WEATHER LOG] Parsed Result for {target_date_str} (Ver: {data_ver}):"
-          f" {result}\n"
-      )
-      return result
-    else:
-      print(f"[WEATHER LOG ERROR] Response content: {res.text}")
+        result = {
+            "morning_rain": morning_rain,
+            "morning_prob": morning_prob,
+            "evening_rain": evening_rain,
+            "evening_prob": evening_prob,
+        }
+        print(f"[WEATHER LOG] WeatherAPI Result: {result}")
+        return result
 
   except Exception as e:
-    print(f"[WEATHER LOG EXCEPTION] Failed to fetch weather: {e}")
+    print(f"[WEATHER LOG ERROR] WeatherAPI failed: {e}")
+
+  return fetch_from_met_no(target_date_str)
+
+
+# Hàm dự phòng dùng Met.no (Miễn phí 100%, không cần API Key, không lo cấm IP)
+def fetch_from_met_no(target_date_str):
+  url = "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=10.8031&lon=106.7324"
+  headers = {"User-Agent": "ThaoDienTVDashboard/1.0 (contact@banqup.vn)"}
+  try:
+    res = requests.get(url, headers=headers, timeout=5)
+    if res.status_code == 200:
+      timeseries = (
+          res.json().get("properties", {}).get("timeseries", [])
+      )
+      m_rain, e_rain = 0.0, 0.0
+
+      for item in timeseries:
+        t_utc = datetime.datetime.strptime(
+            item["time"], "%Y-%m-%dT%H:%M:%SZ"
+        )
+        t_vn = t_utc + datetime.timedelta(hours=7)
+
+        if t_vn.strftime("%Y-%m-%d") == target_date_str:
+          precip = (
+              item.get("data", {})
+              .get("next_1_hours", {})
+              .get("details", {})
+              .get("precipitation_amount", 0.0)
+          )
+          if 7 <= t_vn.hour <= 9:
+            m_rain += precip
+          elif 17 <= t_vn.hour <= 19:
+            e_rain += precip
+
+      m_rain = round(m_rain, 1)
+      e_rain = round(e_rain, 1)
+
+      return {
+          "morning_rain": m_rain,
+          "morning_prob": 80 if m_rain > 0.5 else (40 if m_rain > 0 else 10),
+          "evening_rain": e_rain,
+          "evening_prob": 85 if e_rain > 0.5 else (40 if e_rain > 0 else 10),
+      }
+  except Exception as e:
+    print(f"[WEATHER LOG ERROR] Met.no failed: {e}")
 
   return {
       "morning_rain": 0.0,
