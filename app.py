@@ -48,9 +48,17 @@ def get_three_workdays(from_date):
 
 @cached(weather_cache)
 def fetch_hourly_weather_thao_dien(target_date_str, data_ver):
-  url = f"https://api.open-meteo.com/v1/forecast?latitude=10.8031&longitude=106.7324&hourly=precipitation,precipitation_probability&timezone=Asia%2FBangkok&start_date={target_date_str}&end_date={target_date_str}"
+  url = (
+      f"https://api.open-meteo.com/v1/forecast?latitude=10.8031&longitude=106.7324"
+      f"&hourly=precipitation,precipitation_probability"
+      f"&timezone=Asia%2FBangkok&start_date={target_date_str}&end_date={target_date_str}"
+  )
+  print(f"\n[WEATHER LOG] Fetching: {url}")
+
   try:
     res = requests.get(url, timeout=5)
+    print(f"[WEATHER LOG] Status Code: {res.status_code}")
+
     if res.status_code == 200:
       data = res.json()
       hourly = data.get("hourly", {})
@@ -58,22 +66,24 @@ def fetch_hourly_weather_thao_dien(target_date_str, data_ver):
       precip = hourly.get("precipitation", [])
       prob = hourly.get("precipitation_probability", [])
 
+      print(f"[WEATHER LOG] Received {len(times)} hourly records.")
+      print(f"[WEATHER LOG] Raw precip: {precip}")
+      print(f"[WEATHER LOG] Raw prob: {prob}")
+
       morning_rain_list = []
       morning_prob_list = []
       evening_rain_list = []
       evening_prob_list = []
 
-      # Đọc chính xác theo chuỗi thời gian ISO "YYYY-MM-DDT07:00"
       for t_str, p_val, pr_val in zip(times, precip, prob, strict=False):
-        # Lấy giờ từ chuỗi ISO (ví dụ: "2026-09-25T07:00" -> 7)
         hour = int(t_str.split("T")[1].split(":")[0])
 
-        # Ca sáng: 07h00, 08h00, 09h00
+        # Ca sáng: 7h, 8h, 9h
         if 7 <= hour <= 9:
           morning_rain_list.append(p_val or 0.0)
           morning_prob_list.append(pr_val or 0)
 
-        # Ca chiều: 17h00, 18h00, 19h00
+        # Ca chiều: 17h, 18h, 19h
         elif 17 <= hour <= 19:
           evening_rain_list.append(p_val or 0.0)
           evening_prob_list.append(pr_val or 0)
@@ -84,14 +94,22 @@ def fetch_hourly_weather_thao_dien(target_date_str, data_ver):
       evening_rain = round(sum(evening_rain_list), 1)
       evening_prob = max(evening_prob_list) if evening_prob_list else 0
 
-      return {
+      result = {
           "morning_rain": morning_rain,
           "morning_prob": morning_prob,
           "evening_rain": evening_rain,
           "evening_prob": evening_prob,
       }
+      print(
+          f"[WEATHER LOG] Parsed Result for {target_date_str} (Ver: {data_ver}):"
+          f" {result}\n"
+      )
+      return result
+    else:
+      print(f"[WEATHER LOG ERROR] Response content: {res.text}")
+
   except Exception as e:
-    print(f"Lỗi fetch weather: {e}")
+    print(f"[WEATHER LOG EXCEPTION] Failed to fetch weather: {e}")
 
   return {
       "morning_rain": 0.0,
@@ -99,7 +117,6 @@ def fetch_hourly_weather_thao_dien(target_date_str, data_ver):
       "evening_rain": 0.0,
       "evening_prob": 0,
   }
-
 
 @cached(pdf_cache)
 def fetch_latest_pdf(today_date_str, data_ver):
