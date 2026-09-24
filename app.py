@@ -50,27 +50,49 @@ def get_three_workdays(from_date):
 def fetch_hourly_weather_thao_dien(target_date_str, data_ver):
   url = f"https://api.open-meteo.com/v1/forecast?latitude=10.8031&longitude=106.7324&hourly=precipitation,precipitation_probability&timezone=Asia%2FBangkok&start_date={target_date_str}&end_date={target_date_str}"
   try:
-    res = requests.get(url, timeout=3)
+    res = requests.get(url, timeout=5)
     if res.status_code == 200:
       data = res.json()
-      precip = data.get("hourly", {}).get("precipitation", [])
-      prob = data.get("hourly", {}).get("precipitation_probability", [])
+      hourly = data.get("hourly", {})
+      times = hourly.get("time", [])
+      precip = hourly.get("precipitation", [])
+      prob = hourly.get("precipitation_probability", [])
+
+      morning_rain_list = []
+      morning_prob_list = []
+      evening_rain_list = []
+      evening_prob_list = []
+
+      # Đọc chính xác theo chuỗi thời gian ISO "YYYY-MM-DDT07:00"
+      for t_str, p_val, pr_val in zip(times, precip, prob, strict=False):
+        # Lấy giờ từ chuỗi ISO (ví dụ: "2026-09-25T07:00" -> 7)
+        hour = int(t_str.split("T")[1].split(":")[0])
+
+        # Ca sáng: 07h00, 08h00, 09h00
+        if 7 <= hour <= 9:
+          morning_rain_list.append(p_val or 0.0)
+          morning_prob_list.append(pr_val or 0)
+
+        # Ca chiều: 17h00, 18h00, 19h00
+        elif 17 <= hour <= 19:
+          evening_rain_list.append(p_val or 0.0)
+          evening_prob_list.append(pr_val or 0)
+
+      morning_rain = round(sum(morning_rain_list), 1)
+      morning_prob = max(morning_prob_list) if morning_prob_list else 0
+
+      evening_rain = round(sum(evening_rain_list), 1)
+      evening_prob = max(evening_prob_list) if evening_prob_list else 0
+
       return {
-          "morning_rain": (
-              round(sum(precip[7:10]), 1) if len(precip) >= 10 else 0.0
-          ),
-          "morning_prob": (
-              max(prob[7:10]) if len(prob) >= 10 and prob[7:10] else 0
-          ),
-          "evening_rain": (
-              round(sum(precip[17:20]), 1) if len(precip) >= 20 else 0.0
-          ),
-          "evening_prob": (
-              max(prob[17:20]) if len(prob) >= 20 and prob[17:20] else 0
-          ),
+          "morning_rain": morning_rain,
+          "morning_prob": morning_prob,
+          "evening_rain": evening_rain,
+          "evening_prob": evening_prob,
       }
-  except Exception:
-    pass
+  except Exception as e:
+    print(f"Lỗi fetch weather: {e}")
+
   return {
       "morning_rain": 0.0,
       "morning_prob": 0,
